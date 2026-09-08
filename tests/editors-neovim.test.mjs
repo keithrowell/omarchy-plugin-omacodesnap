@@ -79,7 +79,7 @@ test("live: neovim.detect finds a real Neovim, then resolveSelection reports the
     const override = await neovim.resolveSelection({ context });
     assert.ok(override, "expected an active-selection override");
     assert.equal(override.text, "const x = 1;");
-    assert.ok(override.filename.endsWith("sample.js"));
+    assert.equal(override.filename, "sample.js"); // the title bar's filename, not the buffer's full path
     assert.ok(override.lines[0].some((s) => s.color && s.color.startsWith("#")));
   } finally {
     child.kill();

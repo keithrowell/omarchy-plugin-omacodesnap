@@ -96,7 +96,11 @@ local function main()
   local result = {
     filetype = vim.bo.filetype,
     colorscheme = vim.g.colors_name,
-    filename = vim.fn.expand("%:p"),
+    -- `:t` (tail) — every other adapter's title shows a bare filename or a
+    -- short project-relative path (Zed), never a full filesystem path; `:p`
+    -- was a leftover from an earlier draft, and produced an absolute path
+    -- long enough to need eliding in the frame's title bar.
+    filename = vim.fn.expand("%:t"),
   }
   result.editorForeground = (hl_style("Normal") or {}).fg
 
