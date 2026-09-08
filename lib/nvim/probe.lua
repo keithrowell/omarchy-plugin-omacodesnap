@@ -48,13 +48,23 @@ local function line_spans(row, fromCol, toCol)
   local to = toCol or #line
   local spans = {}
   for col = from, to - 1 do
-    local style = style_at(row, col)
     local ch = line:sub(col + 1, col + 1)
-    local last = spans[#spans]
-    if last and last.color == style.fg and last.bold == style.bold and last.italic == style.italic then
-      last.text = last.text .. ch
-    else
-      table.insert(spans, { text = ch, color = style.fg, bold = style.bold, italic = style.italic })
+    -- `to` can land one past the line's last character — e.g. `v$` in
+    -- charwise visual mode reports `getpos('.')`'s column as `#line + 1`
+    -- (confirmed live: a selection ending on a short last line) — and
+    -- `string.sub` past the end of the string returns "" rather than
+    -- erroring. Skip it rather than recording a colour for a character
+    -- that isn't there: an empty-text span next to real content on the
+    -- same line fails the renderer's own invariant (empty text is only
+    -- ever valid as a line's *sole* span).
+    if ch ~= "" then
+      local style = style_at(row, col)
+      local last = spans[#spans]
+      if last and last.color == style.fg and last.bold == style.bold and last.italic == style.italic then
+        last.text = last.text .. ch
+      else
+        table.insert(spans, { text = ch, color = style.fg, bold = style.bold, italic = style.italic })
+      end
     end
   end
   if #spans == 0 then
