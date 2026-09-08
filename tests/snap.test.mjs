@@ -775,6 +775,87 @@ test('CLI: re-highlighting with --language plain forces no language (the preview
   }
 });
 
+test("CLI: wraps at the default 80 characters on the initial run, no --wrap flags needed", () => {
+  const dir = scratchDir("omacodesnap-snap-cli-wrap-default-");
+  try {
+    const selection = join(dir, "selection.txt");
+    writeFileSync(selection, "x".repeat(200) + "\n");
+    const window = writeWindow(dir, { class: "foot", title: "" });
+    const request = join(dir, "request.json");
+    const out = join(dir, "input.json");
+
+    execFileSync(process.execPath, [SNAP_CLI, "--selection", selection, "--window", window, "--request", request, "--out", out, "--theme-dir", GRUVBOX_DIR], {
+      encoding: "utf8",
+    });
+    const input = JSON.parse(readFileSync(out, "utf8"));
+    assert.equal(input.snap.wrap, true);
+    assert.equal(input.snap.wrapWidth, 80);
+    assert.ok(input.snap.lines.length > 1, "expected the 200-char line to have wrapped into multiple rows");
+    assert.ok(input.snap.lines.every((line) => line.map((s) => s.text).join("").length <= 80));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("CLI: --no-wrap and --wrap-width both work on the initial run", () => {
+  const dir = scratchDir("omacodesnap-snap-cli-wrap-initial-");
+  try {
+    const selection = join(dir, "selection.txt");
+    writeFileSync(selection, "x".repeat(50) + "\n");
+    const window = writeWindow(dir, { class: "foot", title: "" });
+    const out = join(dir, "input.json");
+
+    execFileSync(
+      process.execPath,
+      [SNAP_CLI, "--selection", selection, "--window", window, "--request", join(dir, "r1.json"), "--out", out, "--theme-dir", GRUVBOX_DIR, "--no-wrap"],
+      { encoding: "utf8" },
+    );
+    assert.deepEqual(JSON.parse(readFileSync(out, "utf8")).snap.wrap, false);
+
+    execFileSync(
+      process.execPath,
+      [SNAP_CLI, "--selection", selection, "--window", window, "--request", join(dir, "r2.json"), "--out", out, "--theme-dir", GRUVBOX_DIR, "--wrap-width", "20"],
+      { encoding: "utf8" },
+    );
+    const input = JSON.parse(readFileSync(out, "utf8"));
+    assert.equal(input.snap.wrapWidth, 20);
+    assert.ok(input.snap.lines.length > 1, "expected the 50-char line to wrap at width 20");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("CLI: re-highlighting from --request carries --wrap/--wrap-width through, same as --language", () => {
+  const dir = scratchDir("omacodesnap-snap-cli-wrap-rehl-");
+  try {
+    const selection = join(dir, "selection.txt");
+    writeFileSync(selection, "x".repeat(50)); // no trailing newline: exactly one source line
+    const window = writeWindow(dir, { class: "foot", title: "" });
+    const request = join(dir, "request.json");
+    const out = join(dir, "input.json");
+
+    execFileSync(process.execPath, [SNAP_CLI, "--selection", selection, "--window", window, "--request", request, "--out", out, "--theme-dir", GRUVBOX_DIR], {
+      encoding: "utf8",
+    });
+
+    execFileSync(process.execPath, [SNAP_CLI, "--request", request, "--language", "plain", "--wrap-width", "10", "--out", out, "--theme-dir", GRUVBOX_DIR], {
+      encoding: "utf8",
+    });
+    const wrapped = JSON.parse(readFileSync(out, "utf8"));
+    assert.equal(wrapped.snap.wrapWidth, 10);
+    assert.ok(wrapped.snap.lines.length > 1);
+
+    execFileSync(process.execPath, [SNAP_CLI, "--request", request, "--language", "plain", "--no-wrap", "--out", out, "--theme-dir", GRUVBOX_DIR], {
+      encoding: "utf8",
+    });
+    const unwrapped = JSON.parse(readFileSync(out, "utf8"));
+    assert.equal(unwrapped.snap.wrap, false);
+    assert.equal(unwrapped.snap.lines.length, 1);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // --- bin/omacodesnap (script level, live/benchmark path) ------------------------
 
 // A scratch HOME/XDG_RUNTIME_DIR and a PATH built only from the coreutils
