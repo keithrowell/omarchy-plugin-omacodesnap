@@ -343,6 +343,100 @@ test("prepareSnap: a real VS Code window, end to end through the registry, repor
   assert.equal(result.snap.filename, "sample.js");
 });
 
+// --- snap providers (ADR-0010) -------------------------------------------
+//
+// Unit-tests prepareSnap's "find a matching provider, else fall through"
+// decision logic in isolation, via injected scanProvidersFn/runProviderFn
+// fakes — the same dependency-injection pattern already used above for
+// detectContext/highlightFn/fontFn. This is the regression guard for the
+// "must not change behaviour for Zed/VS Code/Neovim/other" requirement: a
+// non-matching or absent provider must reach detectContext exactly as
+// before, and a matching one must never reach it at all. A true end-to-end
+// test (a real installed plugin directory, a real focused Hyprland window,
+// the live hotkey script) isn't practical from this unit-test suite — there
+// is no live Hyprland/quickshell session in CI — so the manual verification
+// in the ADR/PR description covers scanProviders+runProvider's real
+// discovery-and-invocation path outside of any mocking instead.
+
+test("prepareSnap: a matching provider's fixture is used directly — detectContext, resolveSelection and highlighting never run", async () => {
+  const fixture = {
+    filename: "OmaWordl 1",
+    subtitle: "OmaWordl 1 3/6",
+    showGutter: false,
+    compact: true,
+    language: null,
+    editor: "other",
+    font: { family: "monospace", size: 32 },
+    lines: [[{ text: "GREEN", color: "#00ff00" }]],
+  };
+  const result = await prepareSnap({
+    text: "ignored — providers don't need a selection at all",
+    windowClass: "com.keithrowell.omawordl",
+    title: "ignored",
+    theme: GRUVBOX,
+    scanProvidersFn: () => [{ windowClass: "com.keithrowell.omawordl", command: "bin/omawordl-snap", pluginDir: "/fake/omawordl" }],
+    runProviderFn: async () => fixture,
+    detectContext: () => {
+      throw new Error("detectEditorContext must not run when a provider matches");
+    },
+    highlightFn: () => {
+      throw new Error("the universal highlighter must not run when a provider matches");
+    },
+  });
+  assert.deepEqual(result.snap, fixture);
+  assert.deepEqual(result.warnings, []);
+  assert.equal(result.detected.editor, "other");
+  assert.equal(result.detected.filename, "OmaWordl 1");
+});
+
+test("prepareSnap: no matching provider (windowClass not registered) falls straight through to today's editor-detection behaviour", async () => {
+  const result = await prepareSnap({
+    text: "const a = 1;\n",
+    windowClass: "dev.zed.Zed",
+    title: "sample.js — sample.js",
+    theme: GRUVBOX,
+    scanProvidersFn: () => [{ windowClass: "com.keithrowell.omawordl", command: "bin/omawordl-snap", pluginDir: "/fake/omawordl" }],
+    runProviderFn: async () => {
+      throw new Error("runProviderFn must not run when no provider's windowClass matches");
+    },
+    highlightFn: ({ text }) => canned(text),
+    fontFn: () => ({ family: "monospace", size: 13 }),
+  });
+  assert.equal(result.snap.editor, "zed");
+  assert.equal(result.snap.language, "javascript");
+  assert.equal(result.snap.filename, "sample.js");
+});
+
+test("prepareSnap: a matching provider whose runProviderFn returns null (any failure) falls straight through to today's editor-detection behaviour", async () => {
+  const result = await prepareSnap({
+    text: "const a = 1;\n",
+    windowClass: "dev.zed.Zed",
+    title: "sample.js — sample.js",
+    theme: GRUVBOX,
+    scanProvidersFn: () => [{ windowClass: "dev.zed.Zed", command: "bin/broken-provider", pluginDir: "/fake/broken" }],
+    runProviderFn: async () => null,
+    highlightFn: ({ text }) => canned(text),
+    fontFn: () => ({ family: "monospace", size: 13 }),
+  });
+  assert.equal(result.snap.editor, "zed");
+  assert.equal(result.snap.language, "javascript");
+  assert.equal(result.snap.filename, "sample.js");
+});
+
+test("prepareSnap: no scanProviders result at all (no windowClass given) skips the provider check without erroring", async () => {
+  const result = await prepareSnap({
+    text: "x = 1\n",
+    title: "",
+    theme: GRUVBOX,
+    scanProvidersFn: () => {
+      throw new Error("scanProvidersFn must not run when windowClass is falsy — nothing to match against");
+    },
+    highlightFn: ({ text }) => canned(text),
+    fontFn: () => ({ family: "monospace", size: 13 }),
+  });
+  assert.equal(result.snap.editor, "other");
+});
+
 // --- CLI -----------------------------------------------------------------
 
 function writeWindow(dir, obj) {
@@ -577,7 +671,16 @@ test("bin/omasnap --benchmark: times a 60-line selection, prints the four timing
   }
 });
 
-test("bin/omasnap: an empty selection notifies \"Nothing selected\" and exits 0 without ever launching qs", () => {
+// Regression guard (ADR-0010): with no snap provider registered for the
+// focused window's class — the overwhelming common case, and every case
+// before this spec existed — an empty selection must still bail exactly as
+// before: bash hands off to `node lib/snap.mjs` unconditionally now (see
+// bin/omasnap), but that CLI's own provider-aware check finds nothing
+// registered under this scratch HOME's (nonexistent)
+// ~/.config/omarchy/plugins, so it still exits 3 and this script still
+// notifies "Nothing selected" and exits 0 without ever reaching the
+// omarchy-shell IPC call.
+test("bin/omasnap: an empty selection notifies \"Nothing selected\" and exits 0 without ever launching qs, when no provider matches", () => {
   const { home, runtimeDir, pictures, pathDir } = scratchScriptEnv("omasnap-bin-empty-");
   try {
     writeFakeTool(pathDir, "wl-paste", "exit 1"); // both --primary and the clipboard fallback come up empty
@@ -593,6 +696,83 @@ test("bin/omasnap: an empty selection notifies \"Nothing selected\" and exits 0 
     assert.match(notifyCalls, /^Omasnap$/m);
     assert.match(notifyCalls, /^Nothing selected$/m);
     assert.ok(!existsSync(join(home, "qs-invocations.txt")), "qs must never be launched for an empty selection");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// A `omarchy-shell` that records its invocation (and args — notably the
+// `$INPUT` path) instead of ever actually reaching a real Omarchy shell
+// process. Only reached once `node lib/snap.mjs` has succeeded (status 0),
+// i.e. once a snap — provider-rendered or not — actually exists.
+function writeOmarchyShellSpy(pathDir, home) {
+  writeFakeTool(pathDir, "omarchy-shell", `echo "$@" >> "${join(home, "omarchy-shell-invocations.txt")}"\nexit 0`);
+}
+
+// A real `<pluginsDir>/<id>/manifest.json` + provider script fixture,
+// written straight under the scratch HOME's own
+// `~/.config/omarchy/plugins/` — `lib/providers.mjs`'s `DEFAULT_PLUGINS_DIR`
+// resolves from `$HOME`, so this is picked up by `node lib/snap.mjs`
+// exactly as a real installed sibling plugin would be, no `pluginsDir`
+// override required — the closest this script-level suite gets to the true
+// live path.
+function installFakeProvider(home, { id, windowClass, fixture }) {
+  const pluginDir = join(home, ".config", "omarchy", "plugins", id);
+  mkdirSync(join(pluginDir, "bin"), { recursive: true });
+  writeFileSync(
+    join(pluginDir, "manifest.json"),
+    JSON.stringify({ schemaVersion: 1, id, name: id, version: "1.0.0", omasnap: { provider: "bin/provider-snap", windowClass } }),
+  );
+  const script = join(pluginDir, "bin", "provider-snap");
+  writeFileSync(script, `#!/usr/bin/env node\nconsole.log(JSON.stringify(${JSON.stringify(fixture)}));\n`, { mode: 0o755 });
+  return pluginDir;
+}
+
+test("bin/omasnap: an empty selection with a matching provider renders the provider's fixture instead of bailing with \"Nothing selected\"", () => {
+  const { home, runtimeDir, pictures, pathDir } = scratchScriptEnv("omasnap-bin-provider-");
+  try {
+    const windowClass = "com.keithrowell.testprovider";
+    const fixture = {
+      filename: "Test Provider",
+      subtitle: "Test Provider 1 3/6",
+      showGutter: false,
+      compact: true,
+      language: null,
+      editor: "other",
+      font: { family: "monospace", size: 32 },
+      lines: [[{ text: "hi", color: "#00ff00" }]],
+    };
+    installFakeProvider(home, { id: windowClass, windowClass, fixture });
+
+    writeFakeTool(pathDir, "wl-paste", "exit 1"); // both --primary and the clipboard fallback come up empty — no selection at all
+    writeFakeTool(pathDir, "hyprctl", `if [ "$1" = "activewindow" ]; then echo '{"class":"${windowClass}","title":"Test Provider"}'; exit 0; fi\nexit 1`);
+    writeFakeTool(pathDir, "xdg-user-dir", `echo "${pictures}"`);
+    writeFakeTool(pathDir, "notify-send", `printf '%s\\n' "$@" >> "${join(home, "notify-calls.txt")}"`);
+    writeQsSpy(pathDir, home);
+    writeOmarchyShellSpy(pathDir, home);
+
+    const result = runOmasnap([], { pathDir, home, runtimeDir });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(!existsSync(join(home, "notify-calls.txt")), '"Nothing selected" must not be notified when a provider matches');
+    assert.ok(!existsSync(join(home, "qs-invocations.txt")), "qs (the fixture renderer) is never launched by the live path");
+
+    const shellInvocations = readFileSync(join(home, "omarchy-shell-invocations.txt"), "utf8");
+    assert.match(shellInvocations, /^omasnap show /m, "the live path handed off to the Omasnap shell service");
+
+    // The IPC call's own `$INPUT` argument is a fresh mktemp path (random
+    // suffix); rather than parsing it out of the recorded argv, read
+    // whatever the run left behind under the runtime dir — bin/omasnap's
+    // exit trap only removes SELECTION/WINDOW once the handoff succeeds
+    // (REQUEST/INPUT/PREVIEW_PNG are left for the — here, faked — shell
+    // service to clean up), so exactly one input-*.json should remain.
+    const runtimeFiles = readdirSync(join(runtimeDir, "omasnap"));
+    const inputFile = runtimeFiles.find((f) => f.startsWith("input-"));
+    assert.ok(inputFile, `expected an input-*.json to remain; found ${JSON.stringify(runtimeFiles)}`);
+    const input = JSON.parse(readFileSync(join(runtimeDir, "omasnap", inputFile), "utf8"));
+    assert.equal(input.snap.filename, "Test Provider");
+    assert.equal(input.snap.editor, "other");
+    assert.equal(input.detected.editor, "other");
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
