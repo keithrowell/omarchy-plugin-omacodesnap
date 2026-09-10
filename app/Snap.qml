@@ -653,8 +653,14 @@ Item {
                                         // column_spacing=6)`), scaled to
                                         // this square tile's own edge so
                                         // the ratio matches regardless of
-                                        // font size.
-                                        anchors.margins: parent.isBlockTile ? Math.round(frame.tileEdge / 9) : 0
+                                        // font size. The board's ratio
+                                        // (6/54 = 1/9) is the *combined*
+                                        // gap between two tiles; each tile
+                                        // only owns half of it as its own
+                                        // margin (1/18), or two adjoining
+                                        // tiles' margins would add up to
+                                        // double the real gap.
+                                        anchors.margins: parent.isBlockTile ? Math.round(frame.tileEdge / 18) : 0
                                         visible: parent.isBlockTile
                                         color: parent.modelData.color
                                     }
