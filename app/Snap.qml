@@ -23,6 +23,13 @@ import Quickshell
 // the middle of a tiled desktop has more breathing room around it than the
 // gap between two tiles), which is what `Main.qml` grabs to a PNG.
 //
+// Three optional fixture fields (ADR-0009), each defaulting to the above
+// when absent: `subtitle` overrides the auto-built editor/language caption
+// verbatim; `showGutter: false` drops the line-number column and its
+// reserved width; `compact: true` drops the minWidth/minLines floors and
+// the Hyprland-gap-derived margins in favour of small fixed ones, sizing
+// the whole frame to its content instead of a desktop-window-sized canvas.
+//
 // `frame` is a single plain property holding everything the visual tree
 // below reads (colours, font, geometry): it is (re)built once, atomically,
 // `onInputChanged`, from `input` directly — never from intermediate
@@ -74,6 +81,22 @@ Item {
     readonly property int minWidth: 480
     readonly property int maxWidth: 1600
     readonly property int minLines: 3
+    // `compact: true` (see the fixture field, spec: OmaWordl share-fit)
+    // drops the minWidth/minLines floors and the Hyprland-gap-derived
+    // margins above in favour of these small, fixed factors — a tight
+    // render sized to its own content rather than a full "window" sitting
+    // on a desktop. Still scaled by `S` like every other size here, just
+    // much smaller than the floors they replace.
+    readonly property real compactPaddingFactor: 8
+    readonly property real compactOuterMarginFactor: 12
+    // A small safety margin added on top of the measured header-text width
+    // (see `headerTextWidth` in `buildFrame()`): `TextMetrics` on a full
+    // bold, letter-spaced string still measures a few px narrower than the
+    // same string's actual rendered advance (the single-glyph ink-extent
+    // gotcha documented at `charAdvance` below applies in miniature here
+    // too), which without this silently re-introduced the "OmaWordl 1
+    // 3…" title-truncation bug this measurement exists to prevent.
+    readonly property real headerTextSafetyFactor: 5
     readonly property int gutterDigitsMin: 2
     readonly property string ellipsis: "…"
     // Only used when `look.shadowEnabled` (Hyprland's own default is off;
@@ -149,9 +172,17 @@ Item {
         return result;
     }
 
-    function measureWidth(text, family, pixelSize) {
+    // `bold`/`letterSpacing` default to the code font's own plain styling
+    // (every existing caller); the header-width measurement below is the
+    // only caller that passes them, to match `titleText`/`subtitleText`'s
+    // actual `font.bold`/`font.letterSpacing` — every property is set on
+    // every call (never left over from a previous one), since `charMetrics`
+    // is one shared, imperatively-driven item.
+    function measureWidth(text, family, pixelSize, bold, letterSpacing) {
         charMetrics.font.family = family;
         charMetrics.font.pixelSize = pixelSize;
+        charMetrics.font.bold = bold === true;
+        charMetrics.font.letterSpacing = letterSpacing || 0;
         charMetrics.text = text;
         return charMetrics.width;
     }
@@ -187,12 +218,23 @@ Item {
         // border below reproduces that exactly.
         const innerRounding = Math.max(0, rounding - borderSize);
 
+        // `showGutter`/`compact` are optional fixture fields (normalized by
+        // `lib/input.mjs`'s `buildInput` to `true`/`false` respectively when
+        // absent), defended here the same way `look`'s fields are above, for
+        // a hand-built fixture that skips `buildInput` entirely.
+        const showGutter = snapData.showGutter !== false;
+        const compact = snapData.compact === true;
+
         // --- Header geometry (see the constants block's comment) ---
         const S = fontSize / baseFontSize;
 
-        const outerMargin = Math.max(Math.round(minOuterMarginFactor * S), Math.round(gapsOut * outerGapFactor));
-        const padding = Math.max(Math.round(minPaddingFactor * S), Math.round(gapsOut * innerPadFactor));
-        const bottomPadding = padding + Math.round(bottomPaddingExtraFactor * S);
+        const outerMargin = compact
+            ? Math.round(compactOuterMarginFactor * S)
+            : Math.max(Math.round(minOuterMarginFactor * S), Math.round(gapsOut * outerGapFactor));
+        const padding = compact
+            ? Math.round(compactPaddingFactor * S)
+            : Math.max(Math.round(minPaddingFactor * S), Math.round(gapsOut * innerPadFactor));
+        const bottomPadding = compact ? padding : padding + Math.round(bottomPaddingExtraFactor * S);
 
         const headerPadding = Math.round(headerPaddingFactor * S);
         const headerSpacing = Math.round(headerSpacingFactor * S);
@@ -213,14 +255,15 @@ Item {
         // "ZED · JAVASCRIPT", "VS CODE · PYTHON", "NEOVIM · LUA", "PLAIN
         // TEXT" (source omitted for "other", language "PLAIN TEXT" when
         // null) — see the spec's amended header criterion for the exact
-        // mapping.
+        // mapping. An explicit `subtitle` fixture field overrides this
+        // entirely: used verbatim, no case transformation.
         const sourceLabel =
           snapData.editor === "zed" ? "ZED" : snapData.editor === "vscode" ? "VS CODE" : snapData.editor === "neovim" ? "NEOVIM" : null;
         const languageLabel = snapData.language ? String(snapData.language).toUpperCase() : "PLAIN TEXT";
-        const subtitle = [sourceLabel, languageLabel].filter(Boolean).join(" · ");
+        const subtitle = snapData.subtitle != null ? snapData.subtitle : [sourceLabel, languageLabel].filter(Boolean).join(" · ");
 
         const lineCount = snapData.lines.length;
-        const renderedLineCount = Math.max(lineCount, minLines);
+        const renderedLineCount = compact ? lineCount : Math.max(lineCount, minLines);
         const digits = Math.max(gutterDigitsMin, String(renderedLineCount).length);
         // `TextMetrics.width` on a single "0" measures that glyph's own ink
         // extent, not the font's fixed per-character advance — for
@@ -233,7 +276,10 @@ Item {
         // repeated characters and dividing gives the true average advance.
         const charSampleCount = 64;
         const charAdvance = measureWidth("0".repeat(charSampleCount), fontFamily, fontSize) / charSampleCount;
-        const gutterWidth = Math.ceil(digits * charAdvance + charAdvance);
+        // `showGutter: false` drops the gutter's reserved width entirely —
+        // the code area starts right after `padding`, not after
+        // `padding + gutterWidth`.
+        const gutterWidth = showGutter ? Math.ceil(digits * charAdvance + charAdvance) : 0;
         const maxCodeWidth = maxWidth - gutterWidth - 2 * padding;
 
         const outLines = [];
@@ -254,7 +300,27 @@ Item {
 
         const codeWidth = Math.min(longest, maxCodeWidth);
 
-        const contentWidth = clamp(gutterWidth + codeWidth + 2 * padding, minWidth, maxWidth);
+        // In compact mode there is no `minWidth` floor to incidentally give
+        // the header room (see below) — a short-content, long-title render
+        // (OmaWordl's own case: a few lines of "██" under a real title like
+        // "OmaWordl 1 3/6") would otherwise size the canvas to the code
+        // alone and truncate the header text that is the whole point of the
+        // custom `subtitle`. Measure the header's own text and let it set a
+        // floor, uncapped by anything but `maxWidth`, same as the code path.
+        const headerTextWidth = compact
+            ? Math.ceil(Math.max(
+                measureWidth(title, headerFontFamily, titleSize, true),
+                measureWidth(subtitle, headerFontFamily, captionSize, true, headerCaptionSpacing),
+              )) + 2 * headerPadding + Math.round(headerTextSafetyFactor * S)
+            : 0;
+
+        // `compact: true` drops the `minWidth`/`minLines` floors (this
+        // clamp's lower bound, and `renderedLineCount` above) in favour of
+        // `headerTextWidth` just above — content is still capped at
+        // `maxWidth` either way, same as today.
+        const contentWidth = compact
+            ? Math.min(Math.max(gutterWidth + codeWidth + 2 * padding, headerTextWidth), maxWidth)
+            : clamp(gutterWidth + codeWidth + 2 * padding, minWidth, maxWidth);
         const contentHeight = headerHeight + padding + bottomPadding + renderedLineCount * lineHeight;
 
         return {
@@ -268,6 +334,7 @@ Item {
             lines: outLines,
             renderedLineCount: renderedLineCount,
             gutterWidth: gutterWidth,
+            showGutter: showGutter,
             charAdvance: charAdvance,
             borderSize: borderSize,
             rounding: rounding,
@@ -436,14 +503,19 @@ Item {
 
             // Gutter: right-aligned line numbers starting at 1, one per rendered
             // line (including the padded blank lines when lines < minLines).
+            // `showGutter: false` (see the fixture field) hides this column
+            // and reclaims its width entirely — `frame.gutterWidth` is
+            // already 0 in that case, so `codeColumn` below starts right
+            // after `padding`.
             Column {
                 id: gutterColumn
                 x: frame ? frame.padding : 0
                 y: frame ? frame.headerHeight + frame.padding : 0
-                width: frame ? frame.gutterWidth - frame.charAdvance : 0
+                width: frame ? Math.max(0, frame.gutterWidth - frame.charAdvance) : 0
+                visible: frame ? frame.showGutter : true
                 spacing: 0
                 Repeater {
-                    model: frame ? frame.renderedLineCount : 0
+                    model: frame && frame.showGutter ? frame.renderedLineCount : 0
                     delegate: Text {
                         required property int index
                         width: gutterColumn.width

@@ -43,6 +43,38 @@ test("validateFixture throws naming the path of a line that is not an array", ()
   assert.throws(() => validateFixture(broken), /lines\[2\]/);
 });
 
+// --- validateFixture: subtitle/showGutter/compact (OmaWordl share-fit) ----
+
+test("validateFixture: subtitle absent, or explicitly null, or a string, are all accepted", () => {
+  assert.doesNotThrow(() => validateFixture(HELLO)); // absent
+  assert.doesNotThrow(() => validateFixture({ ...HELLO, subtitle: null }));
+  assert.doesNotThrow(() => validateFixture({ ...HELLO, subtitle: "OmaWordl 1" }));
+});
+
+test("validateFixture: subtitle throws naming its path when neither a string nor null", () => {
+  assert.throws(() => validateFixture({ ...HELLO, subtitle: 42 }), /subtitle: must be a string or null/);
+});
+
+test("validateFixture: showGutter absent, true, or false are all accepted", () => {
+  assert.doesNotThrow(() => validateFixture(HELLO)); // absent
+  assert.doesNotThrow(() => validateFixture({ ...HELLO, showGutter: true }));
+  assert.doesNotThrow(() => validateFixture({ ...HELLO, showGutter: false }));
+});
+
+test("validateFixture: showGutter throws naming its path when not a boolean", () => {
+  assert.throws(() => validateFixture({ ...HELLO, showGutter: "false" }), /showGutter: must be a boolean/);
+});
+
+test("validateFixture: compact absent, true, or false are all accepted", () => {
+  assert.doesNotThrow(() => validateFixture(HELLO)); // absent
+  assert.doesNotThrow(() => validateFixture({ ...HELLO, compact: true }));
+  assert.doesNotThrow(() => validateFixture({ ...HELLO, compact: false }));
+});
+
+test("validateFixture: compact throws naming its path when not a boolean", () => {
+  assert.throws(() => validateFixture({ ...HELLO, compact: 1 }), /compact: must be a boolean/);
+});
+
 // --- resolveSpans ------------------------------------------------------------
 
 function flat(lines) {
@@ -280,6 +312,32 @@ test("buildInput: without an explicit headerFont, one is still computed (falls b
 test("buildInput: an explicit headerFont passes straight through", () => {
   const input = buildInput({ snap: HELLO, theme: GRUVBOX, headerFont: "Iosevka" });
   assert.equal(input.headerFont, "Iosevka");
+});
+
+// --- buildInput: subtitle/showGutter/compact (OmaWordl share-fit) --------
+
+test("buildInput: an explicit subtitle passes through verbatim into snap.subtitle, no case change", () => {
+  const input = buildInput({ snap: { ...HELLO, subtitle: "OmaWordl 1" }, theme: GRUVBOX });
+  assert.equal(input.snap.subtitle, "OmaWordl 1");
+});
+
+test("buildInput: without a subtitle, snap.subtitle normalizes to null (today's auto-built badge, unchanged)", () => {
+  const input = buildInput({ snap: HELLO, theme: GRUVBOX });
+  assert.equal(input.snap.subtitle, null);
+});
+
+test("buildInput: showGutter defaults to true when absent, and an explicit false passes through", () => {
+  const withDefault = buildInput({ snap: HELLO, theme: GRUVBOX });
+  assert.equal(withDefault.snap.showGutter, true);
+  const withOverride = buildInput({ snap: { ...HELLO, showGutter: false }, theme: GRUVBOX });
+  assert.equal(withOverride.snap.showGutter, false);
+});
+
+test("buildInput: compact defaults to false when absent, and an explicit true passes through", () => {
+  const withDefault = buildInput({ snap: HELLO, theme: GRUVBOX });
+  assert.equal(withDefault.snap.compact, false);
+  const withOverride = buildInput({ snap: { ...HELLO, compact: true }, theme: GRUVBOX });
+  assert.equal(withOverride.snap.compact, true);
 });
 
 // --- CLI -----------------------------------------------------------------
