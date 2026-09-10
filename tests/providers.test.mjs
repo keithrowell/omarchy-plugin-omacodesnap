@@ -4,7 +4,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync, symlinkSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { scanProviders, findProvider, runProvider } from "../lib/providers.mjs";
-import { EDITOR_CLASSES } from "../lib/title.mjs";
+import { EDITOR_CLASSES, TRANSIENT_CLASSES } from "../lib/title.mjs";
+import { TERMINAL_CLASSES } from "../lib/nvim-rpc.mjs";
 
 function scratchDir(prefix) {
   return mkdtempSync(join(tmpdir(), prefix));
@@ -186,6 +187,49 @@ test("scanProviders: every EDITOR_CLASSES entry is refused as a provider id", ()
     const allClasses = Object.values(EDITOR_CLASSES).flat();
     allClasses.forEach((cls, i) => {
       addPlugin(pluginsDir, cls, { schemaVersion: 1, id: cls, name: "Fake", version: "1.0.0", omasnap: { provider: "snap.sh" } }, { dirName: `fake-${i}` });
+    });
+    assert.deepEqual(scanProviders(pluginsDir), []);
+  } finally {
+    rmSync(pluginsDir, { recursive: true, force: true });
+  }
+});
+
+// Neovim isn't detected by its own window class at all — it runs *inside*
+// a terminal, so the window class Hyprland reports is the terminal's own
+// (`lib/nvim-rpc.mjs`'s `TERMINAL_CLASSES`), not something Neovim-specific.
+// A provider declaring `id: "foot"` (or any other terminal class) would
+// otherwise register cleanly and intercept every snap taken from that
+// terminal, live Neovim sessions included — the same hijack shape as the
+// Zed/VS Code case, just a different (pid-based, not class-based)
+// detection mechanism underneath, which the EDITOR_CLASSES-only refusal
+// list didn't cover.
+test('scanProviders: a manifest id matching a terminal class Neovim detection relies on (e.g. "foot") is refused, not registered', () => {
+  const pluginsDir = scratchDir("omasnap-providers-hijack-terminal-");
+  try {
+    addPlugin(pluginsDir, "foot", { schemaVersion: 1, id: "foot", name: "Fake Foot Hijacker", version: "1.0.0", omasnap: { provider: "hijack.sh" } }, { dirName: "fake-foot-plugin" });
+    assert.deepEqual(scanProviders(pluginsDir), []);
+  } finally {
+    rmSync(pluginsDir, { recursive: true, force: true });
+  }
+});
+
+test("scanProviders: every TERMINAL_CLASSES entry is refused as a provider id", () => {
+  const pluginsDir = scratchDir("omasnap-providers-hijack-terminal-all-");
+  try {
+    TERMINAL_CLASSES.forEach((cls, i) => {
+      addPlugin(pluginsDir, cls, { schemaVersion: 1, id: cls, name: "Fake", version: "1.0.0", omasnap: { provider: "snap.sh" } }, { dirName: `fake-term-${i}` });
+    });
+    assert.deepEqual(scanProviders(pluginsDir), []);
+  } finally {
+    rmSync(pluginsDir, { recursive: true, force: true });
+  }
+});
+
+test("scanProviders: every TRANSIENT_CLASSES entry (keyring prompt, lock screen, Omarchy shell surfaces) is refused as a provider id", () => {
+  const pluginsDir = scratchDir("omasnap-providers-hijack-transient-");
+  try {
+    TRANSIENT_CLASSES.forEach((cls, i) => {
+      addPlugin(pluginsDir, cls, { schemaVersion: 1, id: cls, name: "Fake", version: "1.0.0", omasnap: { provider: "snap.sh" } }, { dirName: `fake-transient-${i}` });
     });
     assert.deepEqual(scanProviders(pluginsDir), []);
   } finally {

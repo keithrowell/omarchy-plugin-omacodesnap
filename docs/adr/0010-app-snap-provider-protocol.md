@@ -103,11 +103,14 @@ directory of fixture plugin folders instead of the real desktop. A plugin
 subdirectory entry is accepted whether it's a real directory or a symlink
 to one (see "Symlinked plugin directories" in Consequences). Two more
 refusals, both logged: a manifest `id` matching a real, built-in editor's
-own window class (`lib/title.mjs`'s `EDITOR_CLASSES`) is refused outright
-(see "Window-class hijacking" below), and if two different plugin
-directories somehow resolve to the same `windowClass`, the first found
-wins and the collision is logged rather than silently resolved by
-filesystem order.
+own window class — `lib/title.mjs`'s `EDITOR_CLASSES` (Zed/VS Code's own
+classes) *and* `lib/nvim-rpc.mjs`'s `TERMINAL_CLASSES` (the terminal
+classes Neovim detection watches, since Neovim has no window class of its
+own) *and* `lib/title.mjs`'s `TRANSIENT_CLASSES` (keyring prompt, lock
+screen, Omarchy's own shell surfaces) — is refused outright (see
+"Window-class hijacking" below), and if two different plugin directories
+somehow resolve to the same `windowClass`, the first found wins and the
+collision is logged rather than silently resolved by filesystem order.
 
 `runProvider` spawns one provider's command (resolved to an absolute path,
 *verified* to still be inside its own `pluginDir` — see "Path containment"
@@ -254,10 +257,11 @@ be a window it isn't.
   one directory scan (short-circuiting to `[]` when `pluginsDir` doesn't
   exist or has no matching entry) otherwise — `tests/snap.test.mjs`'s full
   existing Zed/VS Code/Neovim/`other` suite (282 tests) still passes
-  unchanged, plus 28 new tests across two rounds (21 in
-  `tests/providers.test.mjs`, 7 more in `tests/snap.test.mjs`: 6
+  unchanged, plus 32 new tests across three rounds (24 in
+  `tests/providers.test.mjs`, 8 more in `tests/snap.test.mjs`: 6
   `prepareSnap`/CLI decision-logic tests and 2 script-level `bin/omasnap`
-  end-to-end tests) — 310 total, 0 regressions.
+  end-to-end tests, plus a further CLI re-highlight-path test) — 314
+  total, 0 regressions.
 - `lib/input.mjs`'s `validateFixture` now has a second caller beyond
   `buildInput`/the fixture CLI: a provider's fixture is validated in
   `runProvider`, *before* it reaches `prepareSnap`'s return value, so an
@@ -285,10 +289,15 @@ be a window it isn't.
   outside the plugin's directory and ran regardless. Caught by review, with
   both variants (`"provider": "../../outside/evil"` and an absolute
   `/tmp/...` path) verified to execute against the pre-fix code. Fixed by
-  verifying the resolved path is still under `pluginDir` (`startsWith(base
-  + sep)`, `sep` imported from `node:path`) before spawning anything,
-  refusing (logging, returning `null`, never executing) otherwise. Verified
-  fixed the same way, plus new tests
+  verifying the resolved path is still under `pluginDir` before spawning
+  anything: either strictly inside it (`startsWith(pluginDir + sep)`, `sep`
+  imported from `node:path`) or equal to `pluginDir` itself
+  (`commandPath === pluginDir` — an edge case, not a hole: `provider.command`
+  resolving to the directory itself just fails at `execFile` with
+  `EACCES`/`EISDIR`, caught the same as any other spawn failure, so it's
+  allowed explicitly rather than left as an accident of the check's
+  shape). A path failing both is refused (logging, returning `null`, never
+  executing). Verified fixed the same way, plus new tests
   (`tests/providers.test.mjs`'s "an absolute command path outside pluginDir
   is refused" / "a ../ escape … is refused").
 - **Window-class hijacking.** The first version's optional
@@ -300,20 +309,32 @@ be a window it isn't.
   the manifest's own `id`, which Omarchy's installer already guarantees
   unique across installed plugins) plus a second, independent layer:
   `scanProviders` refuses any manifest `id` matching a real, built-in
-  editor's own window class (`lib/title.mjs`'s `EDITOR_CLASSES`), so even a
-  plugin whose own `id` literally *is* `"dev.zed.Zed"` cannot register —
-  belt-and-suspenders against exactly the case the id-uniqueness rule
-  doesn't cover, since Zed itself is a real editor, not an Omarchy plugin
-  with a manifest of its own to collide against. A third, purely defensive
-  check logs (rather than silently resolves by filesystem order) the case
-  of two *different* plugin directories somehow resolving to the same
-  `windowClass` — should be unreachable now that matching is `id`-only and
-  ids are unique, but costs nothing to guard.
+  editor's own window class, so even a plugin whose own `id` literally
+  *is* `"dev.zed.Zed"` cannot register — belt-and-suspenders against
+  exactly the case the id-uniqueness rule doesn't cover, since none of
+  these are Omarchy plugins with a manifest of their own to collide
+  against. **This refusal list was initially incomplete** — a second
+  review round caught that it only covered `lib/title.mjs`'s
+  `EDITOR_CLASSES` (Zed/VS Code's own classes), missing that Neovim isn't
+  detected by *any* class of its own at all: it runs inside a terminal, so
+  Hyprland reports the terminal's class (`lib/nvim-rpc.mjs`'s
+  `TERMINAL_CLASSES`: `foot`, `Alacritty`, `kitty`, etc.), and a plugin
+  declaring `id: "foot"` registered cleanly and intercepted every snap
+  taken from a foot-hosted Neovim session — verified end to end the same
+  way as the original Zed exploit. Closed by folding `TERMINAL_CLASSES`,
+  plus `lib/title.mjs`'s `TRANSIENT_CLASSES` (the keyring prompt, lock
+  screen, Omarchy's own shell/quickshell surfaces — never a real editor,
+  but never a legitimate app window for a provider to claim either) into
+  the same refusal set. A third, purely defensive check logs (rather than
+  silently resolves by filesystem order) the case of two *different*
+  plugin directories somehow resolving to the same `windowClass` —
+  should be unreachable now that matching is `id`-only and ids are
+  unique, but costs nothing to guard.
 - **Symlinked plugin directories.** `scanProviders`'s original directory
   filter (`entry.isDirectory()`) trusted `readdirSync`'s `Dirent` flags,
   which reflect `lstat` semantics — a symlink pointing at a real directory
   reports `isDirectory() === false` and was silently skipped. Verified
-  against this machine's real `~/.config/omarchy/plugins/`: 4 of 16
+  against this machine's real `~/.config/omarchy/plugins/`: 4 of the
   installed plugins, including Omasnap's own install, are symlinks (a
   `bin/install`-style dev checkout, or `omarchy plugin clone`, are both
   symlinks by convention) — and OmaWordl's own install would be too. Fixed
@@ -328,15 +349,44 @@ be a window it isn't.
   SIGTERM-ignoring-provider test fails at ~6050ms against the reverted
   fix, passes at ~509ms with it restored) in addition to the exploit
   scenario re-run directly.
-- One cost accepted on the now-rare "nothing selected" path specifically:
-  `hyprctl activewindow -j` is now always called before `node lib/snap.mjs`
-  runs, even when the selection turns out to be empty (previously that
-  bash-level bail skipped it entirely). This is a cheap, already-used
-  Hyprland IPC call (see `lib/hypr.mjs`'s own use of `hyprctl getoption`,
-  same posture), not a new subprocess kind, and nothing heavier — `qs`, the
-  Omasnap shell-service IPC call that actually shows a preview — is paid
-  any more often than before: those still only run once `node lib/snap.mjs`
-  has produced a real snap (provider-rendered or not).
+- Two costs accepted on the now-rare "nothing selected, no provider"
+  path specifically, both a direct consequence of moving the fatal-or-not
+  decision from *before* any real work (the old bash-level fast exit) to
+  *after* `prepareSnap()` has already run (needed so the decision can see
+  `providerSucceeded` — see "A provider that matches but then fails…"
+  above): first, `hyprctl activewindow -j` is now always called before
+  `node lib/snap.mjs` runs, even when the selection turns out to be empty
+  (previously that bash-level bail skipped it entirely) — a cheap,
+  already-used Hyprland IPC call (see `lib/hypr.mjs`'s own use of `hyprctl
+  getoption`, same posture), not a new subprocess kind. Second, and more
+  substantial: an empty-selection-no-provider snap now always runs full
+  editor detection before exiting, including — when the focused window is
+  a terminal class — a live Neovim RPC probe (`lib/nvim-rpc.mjs`'s
+  `discoverNvimAddress`/`queryNvim`, walking `/proc` and probing a Unix
+  socket), where previously it exited immediately with zero work. This is
+  a correctness-neutral cost (the outcome is identical — "Nothing
+  selected" either way — just reached after strictly more work than
+  before) rather than a behaviour change, and is bounded by the same
+  degrade-to-`null`-never-throws guarantees `lib/nvim-rpc.mjs` already
+  gives every other caller; it has not been benchmarked against the "keep
+  under about a second" target in `CONTRIBUTING.md`'s ground rules, which
+  is worth doing if this path's latency is ever reported as noticeable.
+  Neither cost applies to any snap that either has a real selection or
+  matches a provider — nothing heavier (`qs`, the Omasnap shell-service IPC
+  call that actually shows a preview) is paid any more often than before:
+  those still only run once `node lib/snap.mjs` has produced a real snap
+  (provider-rendered or not).
+- The `--request` re-highlight CLI path (the preview's language selector)
+  had its own, separate copy of the Important-3 bug: it called
+  `prepareSnap()` and wrote `--out` unconditionally, with no
+  `providerSucceeded` guard at all, so a provider that succeeded on the
+  first run (writing an originally-empty `text` into `request.json`) but
+  then started failing (a bad release) would have a re-highlight silently
+  overwrite the last real render with a blank card. Fixed with the
+  identical `text.trim() === "" && !result.providerSucceeded` guard,
+  verified against a from-scratch reproduction (a provider that succeeds
+  once, is then made to fail, re-highlighted) both via the automated test
+  and by re-running the CLI directly outside the test suite.
 - If a plugin's `omasnap.provider` command changes behaviour (a bad
   release, say), the blast radius is exactly that plugin's own snap
   failing closed to today's editor-detection/highlighting pipeline — never

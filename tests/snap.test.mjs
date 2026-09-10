@@ -620,6 +620,72 @@ test("CLI: re-highlighting from --request works after the selection and window f
   }
 });
 
+// Important 3, re-highlight path (post-review fix): the --request
+// re-highlight branch had its own copy of the empty-selection problem —
+// it called prepareSnap and wrote --out unconditionally, with no
+// providerSucceeded guard at all. A first run with an empty selection and
+// a then-successful provider carries `text: ""` into request.json (see
+// main()'s `const request = { text, ... }` below); if that same provider
+// later fails (a bad release, say) and the user re-highlights via the
+// preview's language selector, the old code would silently overwrite a
+// real rendered snap with a blank `{"filename":"python",...}` card.
+test("CLI: re-highlighting from --request with an empty original selection and a now-failing provider exits 3, never overwriting --out with a blank render", () => {
+  const dir = scratchDir("omasnap-snap-cli-rehl-provider-fail-");
+  const home = scratchDir("omasnap-snap-cli-rehl-provider-fail-home-");
+  try {
+    const windowClass = "com.keithrowell.testprovider";
+    const pluginDir = join(home, ".config", "omarchy", "plugins", windowClass);
+    mkdirSync(pluginDir, { recursive: true });
+    writeFileSync(
+      join(pluginDir, "manifest.json"),
+      JSON.stringify({ schemaVersion: 1, id: windowClass, name: "Test Provider", version: "1.0.0", omasnap: { provider: "snap.sh" } }),
+    );
+    const scriptPath = join(pluginDir, "snap.sh");
+    // First: a provider that succeeds, so the first run's request.json
+    // carries an originally-empty `text` alongside a real rendered snap.
+    writeFileSync(
+      scriptPath,
+      `#!/usr/bin/env bash\necho '{"filename":"Test Provider","language":null,"editor":"other","font":{"family":"monospace","size":13},"lines":[[{"text":"hi"}]]}'\n`,
+      { mode: 0o755 },
+    );
+
+    const selection = join(dir, "selection.txt");
+    writeFileSync(selection, "   \n\n"); // whitespace-only -> empty after trim
+    const window = writeWindow(dir, { class: windowClass, title: "Test Provider" });
+    const request = join(dir, "request.json");
+    const out = join(dir, "input.json");
+
+    execFileSync(
+      process.execPath,
+      [SNAP_CLI, "--selection", selection, "--window", window, "--request", request, "--out", out, "--theme-dir", GRUVBOX_DIR],
+      { encoding: "utf8", env: { ...process.env, HOME: home } },
+    );
+    const before = JSON.parse(readFileSync(out, "utf8"));
+    assert.equal(before.snap.filename, "Test Provider", "the first run's provider fixture is what's on disk before the re-highlight");
+
+    // Now the same provider starts failing (a bad release, an update gone
+    // wrong) — the re-highlight must not paper over that with a blank card.
+    writeFileSync(scriptPath, "#!/usr/bin/env bash\nexit 1\n", { mode: 0o755 });
+
+    assert.throws(
+      () => {
+        execFileSync(process.execPath, [SNAP_CLI, "--request", request, "--language", "python", "--out", out, "--theme-dir", GRUVBOX_DIR], {
+          encoding: "utf8",
+          stdio: "pipe",
+          env: { ...process.env, HOME: home },
+        });
+      },
+      (err) => err.status === 3,
+    );
+
+    const after = JSON.parse(readFileSync(out, "utf8"));
+    assert.deepEqual(after, before, "--out must be left exactly as the last successful render, never overwritten with a blank/failed one");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('CLI: re-highlighting with --language plain forces no language (the preview\'s "plain" entry)', () => {
   const dir = scratchDir("omasnap-snap-cli-plain-");
   try {
