@@ -1,3 +1,5 @@
 **/specs/.pull.lock
 node_modules/
 vendor/grammars/lib/
+
+.worktrees/
