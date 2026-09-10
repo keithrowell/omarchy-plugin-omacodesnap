@@ -387,6 +387,8 @@ test("prepareSnap: a matching provider's fixture is used directly — detectCont
   assert.deepEqual(result.warnings, []);
   assert.equal(result.detected.editor, "other");
   assert.equal(result.detected.filename, "OmaWordl 1");
+  assert.equal(result.providerMatched, true);
+  assert.equal(result.providerSucceeded, true);
 });
 
 test("prepareSnap: no matching provider (windowClass not registered) falls straight through to today's editor-detection behaviour", async () => {
@@ -405,9 +407,11 @@ test("prepareSnap: no matching provider (windowClass not registered) falls strai
   assert.equal(result.snap.editor, "zed");
   assert.equal(result.snap.language, "javascript");
   assert.equal(result.snap.filename, "sample.js");
+  assert.equal(result.providerMatched, false, "no provider was ever in the picture for this windowClass");
+  assert.equal(result.providerSucceeded, false);
 });
 
-test("prepareSnap: a matching provider whose runProviderFn returns null (any failure) falls straight through to today's editor-detection behaviour", async () => {
+test("prepareSnap: a matching provider whose runProviderFn returns null (any failure) falls straight through to today's editor-detection behaviour, but reports providerMatched so a caller can tell it apart from no-match-at-all", async () => {
   const result = await prepareSnap({
     text: "const a = 1;\n",
     windowClass: "dev.zed.Zed",
@@ -421,6 +425,8 @@ test("prepareSnap: a matching provider whose runProviderFn returns null (any fai
   assert.equal(result.snap.editor, "zed");
   assert.equal(result.snap.language, "javascript");
   assert.equal(result.snap.filename, "sample.js");
+  assert.equal(result.providerMatched, true, "a provider DID match this windowClass, even though it then failed");
+  assert.equal(result.providerSucceeded, false);
 });
 
 test("prepareSnap: no scanProviders result at all (no windowClass given) skips the provider check without erroring", async () => {
@@ -435,6 +441,8 @@ test("prepareSnap: no scanProviders result at all (no windowClass given) skips t
     fontFn: () => ({ family: "monospace", size: 13 }),
   });
   assert.equal(result.snap.editor, "other");
+  assert.equal(result.providerMatched, false);
+  assert.equal(result.providerSucceeded, false);
 });
 
 // --- CLI -----------------------------------------------------------------
@@ -521,6 +529,46 @@ test("CLI: an empty (whitespace-only) selection exits 3", () => {
     assert.ok(!existsSync(out));
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// Important 3 (post-review fix): a provider that *matches* the focused
+// window's class but then fails (nonzero exit, here) must not let an empty
+// selection fall through to a blank/failed render — it must still exit 3,
+// exactly as an unmatched empty selection always has.
+test("CLI: an empty selection with a matching-but-failing provider still exits 3, not a blank render", () => {
+  const dir = scratchDir("omasnap-snap-cli-provider-fail-");
+  const home = scratchDir("omasnap-snap-cli-provider-fail-home-");
+  try {
+    const windowClass = "com.keithrowell.testprovider";
+    const pluginDir = join(home, ".config", "omarchy", "plugins", windowClass);
+    mkdirSync(pluginDir, { recursive: true });
+    writeFileSync(
+      join(pluginDir, "manifest.json"),
+      JSON.stringify({ schemaVersion: 1, id: windowClass, name: "Test Provider", version: "1.0.0", omasnap: { provider: "snap.sh" } }),
+    );
+    writeFileSync(join(pluginDir, "snap.sh"), "#!/usr/bin/env bash\nexit 1\n", { mode: 0o755 });
+
+    const selection = join(dir, "selection.txt");
+    writeFileSync(selection, "   \n\n"); // whitespace-only -> empty after trim
+    const window = writeWindow(dir, { class: windowClass, title: "Test Provider" });
+    const request = join(dir, "request.json");
+    const out = join(dir, "input.json");
+
+    assert.throws(
+      () => {
+        execFileSync(process.execPath, [SNAP_CLI, "--selection", selection, "--window", window, "--request", request, "--out", out, "--theme-dir", GRUVBOX_DIR], {
+          encoding: "utf8",
+          stdio: "pipe",
+          env: { ...process.env, HOME: home },
+        });
+      },
+      (err) => err.status === 3,
+    );
+    assert.ok(!existsSync(out), "no blank/failed render should be written when the matching provider fails and the selection is empty");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true });
   }
 });
 
@@ -716,15 +764,19 @@ function writeOmarchyShellSpy(pathDir, home) {
 // exactly as a real installed sibling plugin would be, no `pluginsDir`
 // override required — the closest this script-level suite gets to the true
 // live path.
-function installFakeProvider(home, { id, windowClass, fixture }) {
+// `windowClass` is always the manifest's own `id` (ADR-0010, Critical-2
+// fix: the override field was removed) — so this helper's `id` argument
+// doubles as the window class the fake provider is registered for. Passing
+// `scriptBody` instead of `fixture` writes that literal shell/node script
+// body (unwrapped) instead of the usual "print this JSON fixture" script,
+// for tests that need the provider to fail in a specific way.
+function installFakeProvider(home, { id, fixture, scriptBody }) {
   const pluginDir = join(home, ".config", "omarchy", "plugins", id);
   mkdirSync(join(pluginDir, "bin"), { recursive: true });
-  writeFileSync(
-    join(pluginDir, "manifest.json"),
-    JSON.stringify({ schemaVersion: 1, id, name: id, version: "1.0.0", omasnap: { provider: "bin/provider-snap", windowClass } }),
-  );
+  writeFileSync(join(pluginDir, "manifest.json"), JSON.stringify({ schemaVersion: 1, id, name: id, version: "1.0.0", omasnap: { provider: "bin/provider-snap" } }));
   const script = join(pluginDir, "bin", "provider-snap");
-  writeFileSync(script, `#!/usr/bin/env node\nconsole.log(JSON.stringify(${JSON.stringify(fixture)}));\n`, { mode: 0o755 });
+  const body = scriptBody ?? `#!/usr/bin/env node\nconsole.log(JSON.stringify(${JSON.stringify(fixture)}));\n`;
+  writeFileSync(script, body, { mode: 0o755 });
   return pluginDir;
 }
 
@@ -742,7 +794,7 @@ test("bin/omasnap: an empty selection with a matching provider renders the provi
       font: { family: "monospace", size: 32 },
       lines: [[{ text: "hi", color: "#00ff00" }]],
     };
-    installFakeProvider(home, { id: windowClass, windowClass, fixture });
+    installFakeProvider(home, { id: windowClass, fixture });
 
     writeFakeTool(pathDir, "wl-paste", "exit 1"); // both --primary and the clipboard fallback come up empty — no selection at all
     writeFakeTool(pathDir, "hyprctl", `if [ "$1" = "activewindow" ]; then echo '{"class":"${windowClass}","title":"Test Provider"}'; exit 0; fi\nexit 1`);
@@ -773,6 +825,36 @@ test("bin/omasnap: an empty selection with a matching provider renders the provi
     assert.equal(input.snap.filename, "Test Provider");
     assert.equal(input.snap.editor, "other");
     assert.equal(input.detected.editor, "other");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// Important 3 (post-review fix), script-level: a provider that *matches*
+// but then fails (nonzero exit) must not turn an empty selection into a
+// blank/failed render reaching the shell service — it must still notify
+// "Nothing selected" and never hand off to omarchy-shell at all, exactly
+// as the no-provider-at-all case does.
+test("bin/omasnap: an empty selection with a matching but failing provider still notifies \"Nothing selected\", never hands off to the shell service", () => {
+  const { home, runtimeDir, pictures, pathDir } = scratchScriptEnv("omasnap-bin-provider-fail-");
+  try {
+    const windowClass = "com.keithrowell.testproviderfail";
+    installFakeProvider(home, { id: windowClass, scriptBody: "#!/usr/bin/env bash\nexit 1\n" });
+
+    writeFakeTool(pathDir, "wl-paste", "exit 1"); // no selection at all
+    writeFakeTool(pathDir, "hyprctl", `if [ "$1" = "activewindow" ]; then echo '{"class":"${windowClass}","title":"Test Provider"}'; exit 0; fi\nexit 1`);
+    writeFakeTool(pathDir, "xdg-user-dir", `echo "${pictures}"`);
+    writeFakeTool(pathDir, "notify-send", `printf '%s\\n' "$@" >> "${join(home, "notify-calls.txt")}"`);
+    writeQsSpy(pathDir, home);
+    writeOmarchyShellSpy(pathDir, home);
+
+    const result = runOmasnap([], { pathDir, home, runtimeDir });
+
+    assert.equal(result.status, 0, result.stderr);
+    const notifyCalls = readFileSync(join(home, "notify-calls.txt"), "utf8");
+    assert.match(notifyCalls, /^Nothing selected$/m, "a matched-but-failed provider with no selection must still fall back to \"Nothing selected\"");
+    assert.ok(!existsSync(join(home, "qs-invocations.txt")), "qs must never be launched");
+    assert.ok(!existsSync(join(home, "omarchy-shell-invocations.txt")), "the shell service must never be handed a blank/failed render");
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
