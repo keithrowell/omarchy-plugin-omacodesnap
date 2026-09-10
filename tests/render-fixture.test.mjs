@@ -75,6 +75,18 @@ test("validateFixture: compact throws naming its path when not a boolean", () =>
   assert.throws(() => validateFixture({ ...HELLO, compact: 1 }), /compact: must be a boolean/);
 });
 
+// --- validateFixture: centerContent (ADR-0011) ----------------------------
+
+test("validateFixture: centerContent absent, true, or false are all accepted", () => {
+  assert.doesNotThrow(() => validateFixture(HELLO)); // absent
+  assert.doesNotThrow(() => validateFixture({ ...HELLO, centerContent: true }));
+  assert.doesNotThrow(() => validateFixture({ ...HELLO, centerContent: false }));
+});
+
+test("validateFixture: centerContent throws naming its path when not a boolean", () => {
+  assert.throws(() => validateFixture({ ...HELLO, centerContent: "true" }), /centerContent: must be a boolean/);
+});
+
 // --- resolveSpans ------------------------------------------------------------
 
 function flat(lines) {
@@ -338,6 +350,15 @@ test("buildInput: compact defaults to false when absent, and an explicit true pa
   assert.equal(withDefault.snap.compact, false);
   const withOverride = buildInput({ snap: { ...HELLO, compact: true }, theme: GRUVBOX });
   assert.equal(withOverride.snap.compact, true);
+});
+
+// --- buildInput: centerContent (ADR-0011) ---------------------------------
+
+test("buildInput: centerContent defaults to false when absent, and an explicit true passes through", () => {
+  const withDefault = buildInput({ snap: HELLO, theme: GRUVBOX });
+  assert.equal(withDefault.snap.centerContent, false);
+  const withOverride = buildInput({ snap: { ...HELLO, centerContent: true }, theme: GRUVBOX });
+  assert.equal(withOverride.snap.centerContent, true);
 });
 
 // --- CLI -----------------------------------------------------------------

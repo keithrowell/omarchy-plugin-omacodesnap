@@ -23,12 +23,15 @@ import Quickshell
 // the middle of a tiled desktop has more breathing room around it than the
 // gap between two tiles), which is what `Main.qml` grabs to a PNG.
 //
-// Three optional fixture fields (ADR-0009), each defaulting to the above
-// when absent: `subtitle` overrides the auto-built editor/language caption
-// verbatim; `showGutter: false` drops the line-number column and its
-// reserved width; `compact: true` drops the minWidth/minLines floors and
-// the Hyprland-gap-derived margins in favour of small fixed ones, sizing
-// the whole frame to its content instead of a desktop-window-sized canvas.
+// Four optional fixture fields (ADR-0009; `centerContent` is ADR-0011),
+// each defaulting to the above when absent: `subtitle` overrides the
+// auto-built editor/language caption verbatim; `showGutter: false` drops
+// the line-number column and its reserved width; `compact: true` drops the
+// minWidth/minLines floors and the Hyprland-gap-derived margins in favour
+// of small fixed ones, sizing the whole frame to its content instead of a
+// desktop-window-sized canvas; `centerContent: true` centres each line's
+// rendered content within the code column's available width instead of
+// left-aligning it — independent of `showGutter`/`compact`.
 //
 // `frame` is a single plain property holding everything the visual tree
 // below reads (colours, font, geometry): it is (re)built once, atomically,
@@ -224,6 +227,14 @@ Item {
         // a hand-built fixture that skips `buildInput` entirely.
         const showGutter = snapData.showGutter !== false;
         const compact = snapData.compact === true;
+        // `centerContent` is an optional fixture field (defended the same
+        // way, for a hand-built fixture that skips `buildInput`), defaults
+        // to `false` (today's exact left-aligned behaviour). Orthogonal to
+        // `showGutter`/`compact`: it only changes each line's `x` offset
+        // within the code column's available width, computed below from
+        // that column's own width regardless of how `showGutter`/`compact`
+        // arrived at it.
+        const centerContent = snapData.centerContent === true;
 
         // --- Header geometry (see the constants block's comment) ---
         const S = fontSize / baseFontSize;
@@ -283,6 +294,11 @@ Item {
         const maxCodeWidth = maxWidth - gutterWidth - 2 * padding;
 
         const outLines = [];
+        // Each rendered line's own final (post-clip) width, in the same
+        // order as `outLines` — reused by `centerContent` below (and only
+        // then) to offset that line's `Row` within the code column's
+        // available width, instead of re-measuring in QML.
+        const lineWidths = [];
         let longest = 0;
         for (let i = 0; i < lineCount; i++) {
             const spans = snapData.lines[i];
@@ -295,6 +311,7 @@ Item {
                 width = measureWidth(lineSpans.map(s => s.text).join(""), fontFamily, fontSize);
             }
             outLines.push(lineSpans);
+            lineWidths.push(width);
             if (width > longest) longest = width;
         }
 
@@ -332,6 +349,8 @@ Item {
             lineHeight: lineHeight,
             padding: padding,
             lines: outLines,
+            lineWidths: lineWidths,
+            centerContent: centerContent,
             renderedLineCount: renderedLineCount,
             gutterWidth: gutterWidth,
             showGutter: showGutter,
@@ -553,6 +572,20 @@ Item {
                         height: frame.lineHeight
                         Row {
                             anchors.verticalCenter: parent.verticalCenter
+                            // `centerContent: true` (fixture field) centres
+                            // this line's actual rendered width within the
+                            // available code-column width (`parent.width`,
+                            // already net of gutter/padding regardless of
+                            // `showGutter`/`compact`) instead of today's
+                            // unconditional flush-left `x: 0`. Guarded by
+                            // `index < frame.lineWidths.length` for the
+                            // blank padded lines beyond the fixture's own
+                            // content (non-compact `minLines` floor), which
+                            // have no measured width and render nothing
+                            // anyway.
+                            x: frame && frame.centerContent && index < frame.lineWidths.length
+                                ? Math.max(0, (parent.width - frame.lineWidths[index]) / 2)
+                                : 0
                             Repeater {
                                 model: index < frame.lines.length ? frame.lines[index] : []
                                 delegate: Text {
