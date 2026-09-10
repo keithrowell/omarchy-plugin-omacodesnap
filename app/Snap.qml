@@ -609,19 +609,25 @@ Item {
                                     height: frame.lineHeight
                                     Rectangle {
                                         anchors.fill: parent
-                                        // Inset horizontally so adjacent
-                                        // same-colour tiles still read as
-                                        // separate squares instead of
-                                        // fusing into one block -- the gap
-                                        // is proportional to the real board
+                                        // Inset on all four sides so tiles
+                                        // read as separate squares both
+                                        // across a row (adjacent columns)
+                                        // and down the grid (adjacent rows)
+                                        // instead of same-coloured
+                                        // neighbours fusing into one block
+                                        // -- the gap is the real board
                                         // grid's own 6px gap on its 54px
                                         // tiles (see `main.py`'s
                                         // `Gtk.Grid(row_spacing=6,
-                                        // column_spacing=6)` over 54px
-                                        // tiles), scaled to this tile's
-                                        // rendered width.
-                                        anchors.leftMargin: parent.isBlockTile ? Math.round(frame.charAdvance / 9) : 0
-                                        anchors.rightMargin: anchors.leftMargin
+                                        // column_spacing=6)`), scaled to
+                                        // this tile's rendered width and
+                                        // applied as an absolute inset in
+                                        // both directions -- the source
+                                        // grid's gap is one absolute pixel
+                                        // value shared by both axes, not a
+                                        // per-axis proportion, even though
+                                        // these tiles aren't square.
+                                        anchors.margins: parent.isBlockTile ? Math.round(frame.charAdvance / 9) : 0
                                         visible: parent.isBlockTile
                                         color: parent.modelData.color
                                     }
