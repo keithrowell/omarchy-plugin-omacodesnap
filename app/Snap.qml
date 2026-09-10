@@ -206,6 +206,12 @@ Item {
         // Zed's "comfortable" line height, VS Code's default, a generic middle ground.
         const lineHeightFactor = snapData.editor === "zed" ? 1.618 : snapData.editor === "vscode" ? 1.35 : 1.5;
         const lineHeight = Math.round(fontSize * lineHeightFactor);
+        // A block-tile span (OmaWordl's tile rows) renders as a square,
+        // not a font-glyph-shaped rectangle -- its edge is the row's own
+        // height, so width == height regardless of font metrics. Matches
+        // the real board, where every tile is a fixed square (`main.py`'s
+        // `width_request=54, height_request=54`) independent of its font.
+        const tileEdge = lineHeight;
 
         // Hyprland's own chrome (see lib/hypr.mjs). `buildInput` always
         // supplies all six `look` fields (live or Omarchy's own defaults);
@@ -302,13 +308,27 @@ Item {
         let longest = 0;
         for (let i = 0; i < lineCount; i++) {
             const spans = snapData.lines[i];
-            const text = spans.map(s => s.text).join("");
-            let width = measureWidth(text, fontFamily, fontSize);
+            // A line made entirely of block-tile spans (OmaWordl's tile
+            // rows) is measured and rendered as `tileEdge`-wide squares,
+            // not by the text glyphs' own advance -- see the matching
+            // `isBlockTile` branch in the per-span delegate below, which
+            // this width must agree with pixel-for-pixel or centring and
+            // canvas sizing drift from what's actually drawn. Never
+            // clipped: a tile grid is always a handful of fixed-width
+            // squares, nowhere near `maxCodeWidth`.
+            const isBlockLine = spans.length > 0 && spans.every(s => /^█+$/.test(s.text));
+            let width;
             let lineSpans = spans;
-            if (width > maxCodeWidth && charAdvance > 0) {
-                const charsThatFit = Math.max(0, Math.floor(maxCodeWidth / charAdvance) - 1);
-                lineSpans = clipSpans(spans, charsThatFit).concat([{ text: ellipsis, color: colors.muted, fontStyle: null, fontWeight: null }]);
-                width = measureWidth(lineSpans.map(s => s.text).join(""), fontFamily, fontSize);
+            if (isBlockLine) {
+                width = spans.length * tileEdge;
+            } else {
+                const text = spans.map(s => s.text).join("");
+                width = measureWidth(text, fontFamily, fontSize);
+                if (width > maxCodeWidth && charAdvance > 0) {
+                    const charsThatFit = Math.max(0, Math.floor(maxCodeWidth / charAdvance) - 1);
+                    lineSpans = clipSpans(spans, charsThatFit).concat([{ text: ellipsis, color: colors.muted, fontStyle: null, fontWeight: null }]);
+                    width = measureWidth(lineSpans.map(s => s.text).join(""), fontFamily, fontSize);
+                }
             }
             outLines.push(lineSpans);
             lineWidths.push(width);
@@ -355,6 +375,7 @@ Item {
             gutterWidth: gutterWidth,
             showGutter: showGutter,
             charAdvance: charAdvance,
+            tileEdge: tileEdge,
             borderSize: borderSize,
             rounding: rounding,
             innerRounding: innerRounding,
@@ -605,7 +626,17 @@ Item {
                                 delegate: Item {
                                     required property var modelData
                                     readonly property bool isBlockTile: /^█+$/.test(modelData.text)
-                                    width: isBlockTile ? frame.charAdvance * modelData.text.length : glyphText.implicitWidth
+                                    // A block-tile span is a square, its
+                                    // edge `frame.tileEdge` (== the row's
+                                    // own height) -- never the font glyphs'
+                                    // own advance width, which is what
+                                    // produced the too-tall/too-narrow
+                                    // rectangles this replaces. Must match
+                                    // `tileEdge`'s use in `buildFrame`'s
+                                    // `lineWidths` measurement above
+                                    // exactly, or centring/canvas sizing
+                                    // drift from what's actually drawn.
+                                    width: isBlockTile ? frame.tileEdge : glyphText.implicitWidth
                                     height: frame.lineHeight
                                     Rectangle {
                                         anchors.fill: parent
@@ -620,14 +651,10 @@ Item {
                                         // tiles (see `main.py`'s
                                         // `Gtk.Grid(row_spacing=6,
                                         // column_spacing=6)`), scaled to
-                                        // this tile's rendered width and
-                                        // applied as an absolute inset in
-                                        // both directions -- the source
-                                        // grid's gap is one absolute pixel
-                                        // value shared by both axes, not a
-                                        // per-axis proportion, even though
-                                        // these tiles aren't square.
-                                        anchors.margins: parent.isBlockTile ? Math.round(frame.charAdvance / 9) : 0
+                                        // this square tile's own edge so
+                                        // the ratio matches regardless of
+                                        // font size.
+                                        anchors.margins: parent.isBlockTile ? Math.round(frame.tileEdge / 9) : 0
                                         visible: parent.isBlockTile
                                         color: parent.modelData.color
                                     }
