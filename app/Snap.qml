@@ -646,21 +646,36 @@ Item {
                                         // and down the grid (adjacent rows)
                                         // instead of same-coloured
                                         // neighbours fusing into one block
-                                        // -- the gap is the real board
-                                        // grid's own 6px gap on its 54px
-                                        // tiles (see `main.py`'s
+                                        // -- matched to the real board's
+                                        // own grid (`main.py`'s
                                         // `Gtk.Grid(row_spacing=6,
-                                        // column_spacing=6)`), scaled to
-                                        // this square tile's own edge so
-                                        // the ratio matches regardless of
-                                        // font size. The board's ratio
-                                        // (6/54 = 1/9) is the *combined*
-                                        // gap between two tiles; each tile
-                                        // only owns half of it as its own
-                                        // margin (1/18), or two adjoining
-                                        // tiles' margins would add up to
-                                        // double the real gap.
-                                        anchors.margins: parent.isBlockTile ? Math.round(frame.tileEdge / 18) : 0
+                                        // column_spacing=6)` over 54px
+                                        // tiles: a 54px *visible* tile plus
+                                        // its 6px share of gap makes a 60px
+                                        // slot-to-slot pitch).
+                                        //
+                                        // `frame.tileEdge` here is that
+                                        // *pitch* (adjacent Items sit at
+                                        // zero Row spacing, so one Item's
+                                        // width is the full slot, not just
+                                        // its visible tile) -- the board
+                                        // analogue is 60, not 54. So the
+                                        // target ratio is gap:pitch = 6:60
+                                        // = 1/10, split into two equal
+                                        // per-tile margins of 1/20 each,
+                                        // NOT 6:54 (gap:visible-tile) as an
+                                        // earlier version of this comment
+                                        // wrongly assumed -- that conflated
+                                        // two different denominators and
+                                        // measurement against a live
+                                        // screenshot showed a ~23%-too-wide
+                                        // gap as a result. Left
+                                        // unrounded: a Rectangle's edge
+                                        // anti-aliases fine at a fractional
+                                        // pixel boundary (unlike the
+                                        // independently-rasterized text
+                                        // glyphs this delegate replaced).
+                                        anchors.margins: parent.isBlockTile ? frame.tileEdge / 20 : 0
                                         visible: parent.isBlockTile
                                         color: parent.modelData.color
                                     }
