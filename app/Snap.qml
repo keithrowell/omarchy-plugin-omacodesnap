@@ -588,17 +588,56 @@ Item {
                                 : 0
                             Repeater {
                                 model: index < frame.lines.length ? frame.lines[index] : []
-                                delegate: Text {
+                                // A span whose text is nothing but full-block
+                                // glyphs (U+2588, as OmaWordl's tile spans
+                                // use) renders as a solid `Rectangle`
+                                // instead of a `Text` glyph. Two adjacent
+                                // glyphs -- within one span, or across a
+                                // tile boundary between two spans -- each
+                                // get anti-aliased independently at their
+                                // own (often non-integer) pixel position,
+                                // leaving a hairline seam of background
+                                // colour between them; a real filled
+                                // rectangle has no glyph edges to seam.
+                                // This also matches how tiles actually look
+                                // on the OmaWordl board itself -- solid
+                                // colour, not text.
+                                delegate: Item {
                                     required property var modelData
-                                    text: modelData.text
-                                    color: modelData.color
+                                    readonly property bool isBlockTile: /^█+$/.test(modelData.text)
+                                    width: isBlockTile ? frame.charAdvance * modelData.text.length : glyphText.implicitWidth
                                     height: frame.lineHeight
-                                    verticalAlignment: Text.AlignVCenter
-                                    textFormat: Text.PlainText
-                                    font.family: frame.fontFamily
-                                    font.pixelSize: frame.fontSize
-                                    font.italic: modelData.fontStyle === "italic"
-                                    font.weight: modelData.fontWeight ? modelData.fontWeight : Font.Normal
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        // Inset horizontally so adjacent
+                                        // same-colour tiles still read as
+                                        // separate squares instead of
+                                        // fusing into one block -- the gap
+                                        // is proportional to the real board
+                                        // grid's own 6px gap on its 54px
+                                        // tiles (see `main.py`'s
+                                        // `Gtk.Grid(row_spacing=6,
+                                        // column_spacing=6)` over 54px
+                                        // tiles), scaled to this tile's
+                                        // rendered width.
+                                        anchors.leftMargin: parent.isBlockTile ? Math.round(frame.charAdvance / 9) : 0
+                                        anchors.rightMargin: anchors.leftMargin
+                                        visible: parent.isBlockTile
+                                        color: parent.modelData.color
+                                    }
+                                    Text {
+                                        id: glyphText
+                                        visible: !parent.isBlockTile
+                                        text: parent.modelData.text
+                                        color: parent.modelData.color
+                                        height: frame.lineHeight
+                                        verticalAlignment: Text.AlignVCenter
+                                        textFormat: Text.PlainText
+                                        font.family: frame.fontFamily
+                                        font.pixelSize: frame.fontSize
+                                        font.italic: parent.modelData.fontStyle === "italic"
+                                        font.weight: parent.modelData.fontWeight ? parent.modelData.fontWeight : Font.Normal
+                                    }
                                 }
                             }
                         }
