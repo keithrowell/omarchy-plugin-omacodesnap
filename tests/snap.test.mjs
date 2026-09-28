@@ -647,6 +647,29 @@ test("CLI: the request JSON carries no code root, and a re-highlight ignores one
   }
 });
 
+// The shell service passes its own manifest.__sourceDir as the code root,
+// and a development install is a symlink to the checkout. Node resolves
+// that symlink for import.meta.url but not for argv[1], which used to make
+// the entry-point check false: the re-highlight exited 0 having done nothing.
+test("CLI: runs when invoked through a symlinked plugin directory", () => {
+  const dir = scratchDir("omacodesnap-snap-cli-symlink-");
+  try {
+    const link = join(dir, "plugin");
+    symlinkSync(ROOT, link);
+    const selection = join(dir, "selection.txt");
+    writeFileSync(selection, "const a = 1;\n");
+    const window = writeWindow(dir, { class: "dev.zed.Zed", title: "sample.js — sample.js" });
+    const request = join(dir, "request.json");
+    const out = join(dir, "input.json");
+
+    execFileSync(process.execPath, [join(link, "lib", "snap.mjs"), "--selection", selection, "--window", window, "--request", request, "--out", out, "--theme-dir", GRUVBOX_DIR], { encoding: "utf8" });
+    execFileSync(process.execPath, [join(link, "lib", "snap.mjs"), "--request", request, "--language", "python", "--out", out, "--theme-dir", GRUVBOX_DIR], { encoding: "utf8" });
+    assert.equal(JSON.parse(readFileSync(out, "utf8")).snap.language, "python");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("CLI: a re-highlight request without inline text/windowInfo is refused, not followed to the paths it names", () => {
   const dir = scratchDir("omacodesnap-snap-cli-legacy-");
   try {
