@@ -77,6 +77,8 @@ deletes the plugin directory, compiled grammars included. Delete the
 binding from `~/.config/hypr/bindings.lua` yourself. Snaps you saved in
 `~/Pictures` (`omacodesnap-*.png`) are yours and stay. Per-snap scratch
 files live under `$XDG_RUNTIME_DIR/omacodesnap/` and are gone at logout.
+Your saved wrap setting, `~/.local/state/omacodesnap/settings.json` (or
+under `$XDG_STATE_HOME`), stays too; delete that directory to forget it.
 
 It needs these packages, most of which Omarchy already ships. The
 installer checks this exact line and tells you if anything is missing:
@@ -95,6 +97,10 @@ appears in about a second.
 - The language button bottom-left shows what was detected. Click it, or
   press **Left**/**Right**, to pick another language or plain text. The
   image redraws.
+- **Wrap** turns line wrapping on or off, and **−**/**+** change the width
+  (20 to 240 characters, in steps of 10; 80 to start with). Lines break
+  between words; a hyphenated word can break after its hyphen. Whatever
+  you pick here is remembered for the next snap.
 - **Esc** or **Close** closes it. Pressing the binding again replaces the
   preview with a fresh snap.
 

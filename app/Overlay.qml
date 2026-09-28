@@ -296,9 +296,12 @@ FloatingWindow {
     // that changed — because each run is a fresh `prepareSnap` from
     // scratch: whichever of the two isn't explicitly repeated would silently
     // reset to the CLI's own default instead of staying as the user left it.
-    function reHighlight(lang, wrapOn, width) {
+    // `saveWrap` (the Wrap toggle and the width stepper, not a language
+    // pick) adds `--save-wrap`, so the wrap setting chosen here becomes the
+    // default for the next snap (lib/settings.mjs).
+    function reHighlight(lang, wrapOn, width, saveWrap) {
         previewWindow.languageBusy = true;
-        languageProcess.command = [
+        const command = [
             "node", previewWindow.rootDir + "/lib/snap.mjs",
             "--request", previewWindow.requestPath,
             "--language", lang,
@@ -306,25 +309,27 @@ FloatingWindow {
             "--wrap-width", String(width),
             "--out", previewWindow.inputPath,
         ];
+        if (saveWrap) command.push("--save-wrap");
+        languageProcess.command = command;
         languageProcess.running = true;
     }
 
     function selectLanguage(lang) {
         previewWindow.popupOpen = false;
         if (lang === previewWindow.currentLanguage || (lang === "plain" && previewWindow.currentLanguage === null)) return;
-        previewWindow.reHighlight(lang, previewWindow.wrapEnabled, previewWindow.wrapWidth);
+        previewWindow.reHighlight(lang, previewWindow.wrapEnabled, previewWindow.wrapWidth, false);
     }
 
     function toggleWrap() {
         const lang = previewWindow.currentLanguage === null ? "plain" : previewWindow.currentLanguage;
-        previewWindow.reHighlight(lang, !previewWindow.wrapEnabled, previewWindow.wrapWidth);
+        previewWindow.reHighlight(lang, !previewWindow.wrapEnabled, previewWindow.wrapWidth, true);
     }
 
     function setWrapWidth(width) {
         const clamped = Math.max(previewWindow.wrapWidthMin, Math.min(previewWindow.wrapWidthMax, width));
         if (clamped === previewWindow.wrapWidth) return;
         const lang = previewWindow.currentLanguage === null ? "plain" : previewWindow.currentLanguage;
-        previewWindow.reHighlight(lang, previewWindow.wrapEnabled, clamped);
+        previewWindow.reHighlight(lang, previewWindow.wrapEnabled, clamped, true);
     }
 
     function cycleLanguage(step) {

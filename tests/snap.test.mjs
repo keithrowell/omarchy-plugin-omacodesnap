@@ -10,6 +10,11 @@ import { validateFixture } from "../lib/input.mjs";
 import { readTheme } from "../lib/theme.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+// Every CLI this file spawns inherits this: an empty state directory of its
+// own, so a wrap setting saved on the machine running the tests (or by one
+// test here) never changes what another test's snap wraps at.
+process.env.XDG_STATE_HOME = mkdtempSync(join(tmpdir(), "omacodesnap-test-state-"));
 const SNAP_CLI = join(ROOT, "lib", "snap.mjs");
 const OMACODESNAP = join(ROOT, "bin", "omacodesnap");
 const GRUVBOX_DIR = join(ROOT, "tests", "fixtures", "themes", "gruvbox-dark", "theme");
@@ -775,6 +780,66 @@ test('CLI: re-highlighting with --language plain forces no language (the preview
   }
 });
 
+// The wrap setting chosen in the preview (its toggle and width stepper
+// send --save-wrap) becomes the default for the next snap.
+test("CLI: --save-wrap on a re-highlight is remembered by the next snap; an explicit flag still wins", () => {
+  const dir = scratchDir("omacodesnap-snap-cli-savewrap-");
+  const env = { ...process.env, XDG_STATE_HOME: join(dir, "state") };
+  try {
+    const selection = join(dir, "selection.txt");
+    writeFileSync(selection, "word ".repeat(40).trim() + "\n");
+    const window = writeWindow(dir, { class: "dev.zed.Zed", title: "a.txt — a.txt" });
+    const request = join(dir, "request.json");
+    const out = join(dir, "input.json");
+    const first = [SNAP_CLI, "--selection", selection, "--window", window, "--request", request, "--out", out, "--theme-dir", GRUVBOX_DIR];
+
+    execFileSync(process.execPath, first, { encoding: "utf8", env });
+    assert.equal(JSON.parse(readFileSync(out, "utf8")).snap.wrapWidth, 80, "nothing saved yet: the default");
+
+    // A plain language change does not save anything.
+    execFileSync(process.execPath, [SNAP_CLI, "--request", request, "--language", "plain", "--wrap", "--wrap-width", "30", "--out", out, "--theme-dir", GRUVBOX_DIR], { encoding: "utf8", env });
+    execFileSync(process.execPath, first, { encoding: "utf8", env });
+    assert.equal(JSON.parse(readFileSync(out, "utf8")).snap.wrapWidth, 80);
+
+    // The stepper's re-highlight does.
+    execFileSync(process.execPath, [SNAP_CLI, "--request", request, "--language", "plain", "--wrap", "--wrap-width", "40", "--save-wrap", "--out", out, "--theme-dir", GRUVBOX_DIR], { encoding: "utf8", env });
+    execFileSync(process.execPath, first, { encoding: "utf8", env });
+    let input = JSON.parse(readFileSync(out, "utf8"));
+    assert.equal(input.snap.wrapWidth, 40);
+    assert.equal(input.snap.wrap, true);
+
+    // The toggle's re-highlight saves "off", keeping the width.
+    execFileSync(process.execPath, [SNAP_CLI, "--request", request, "--language", "plain", "--no-wrap", "--wrap-width", "40", "--save-wrap", "--out", out, "--theme-dir", GRUVBOX_DIR], { encoding: "utf8", env });
+    execFileSync(process.execPath, first, { encoding: "utf8", env });
+    input = JSON.parse(readFileSync(out, "utf8"));
+    assert.equal(input.snap.wrap, false);
+    assert.equal(input.snap.wrapWidth, 40);
+
+    // An explicit flag on the command line overrides the saved setting.
+    execFileSync(process.execPath, [...first, "--wrap", "--wrap-width", "100"], { encoding: "utf8", env });
+    input = JSON.parse(readFileSync(out, "utf8"));
+    assert.equal(input.snap.wrap, true);
+    assert.equal(input.snap.wrapWidth, 100);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("CLI: --wrap-width outside 20–240 or not a whole number is a usage error", () => {
+  const dir = scratchDir("omacodesnap-snap-cli-badwidth-");
+  try {
+    const selection = join(dir, "selection.txt");
+    writeFileSync(selection, "x\n");
+    const window = writeWindow(dir, { class: "dev.zed.Zed", title: "a.txt — a.txt" });
+    for (const bad of ["19", "241", "80.5", "abc"]) {
+      const result = spawnSync(process.execPath, [SNAP_CLI, "--selection", selection, "--window", window, "--request", join(dir, "r.json"), "--out", join(dir, "i.json"), "--theme-dir", GRUVBOX_DIR, "--wrap-width", bad], { encoding: "utf8" });
+      assert.equal(result.status, 2, `${bad}: ${result.stderr}`);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("CLI: wraps at the default 80 characters on the initial run, no --wrap flags needed", () => {
   const dir = scratchDir("omacodesnap-snap-cli-wrap-default-");
   try {
@@ -838,11 +903,11 @@ test("CLI: re-highlighting from --request carries --wrap/--wrap-width through, s
       encoding: "utf8",
     });
 
-    execFileSync(process.execPath, [SNAP_CLI, "--request", request, "--language", "plain", "--wrap-width", "10", "--out", out, "--theme-dir", GRUVBOX_DIR], {
+    execFileSync(process.execPath, [SNAP_CLI, "--request", request, "--language", "plain", "--wrap-width", "20", "--out", out, "--theme-dir", GRUVBOX_DIR], {
       encoding: "utf8",
     });
     const wrapped = JSON.parse(readFileSync(out, "utf8"));
-    assert.equal(wrapped.snap.wrapWidth, 10);
+    assert.equal(wrapped.snap.wrapWidth, 20);
     assert.ok(wrapped.snap.lines.length > 1);
 
     execFileSync(process.execPath, [SNAP_CLI, "--request", request, "--language", "plain", "--no-wrap", "--out", out, "--theme-dir", GRUVBOX_DIR], {
