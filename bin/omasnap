@@ -174,10 +174,13 @@ if [ -z "$FIXTURE" ]; then
     t1=$(date +%s%N)
     echo "selection: $(( (t1 - t0) / 1000000 )) ms"
 
-    if [ ! -s "$SELECTION" ]; then
-      notify-send "Omasnap" "Nothing selected" 2>/dev/null || true
-      exit 0
-    fi
+    # An empty selection is not a fast exit here (ADR-0010): a snap
+    # provider registered for the focused window's class is a complete,
+    # self-sufficient answer regardless of what's selected, and
+    # `node lib/snap.mjs`/`prepareSnap()` below is the one place that
+    # already knows the provider registry — it makes the "is this
+    # actually fatal" call itself (its own exit code 3, handled below,
+    # exactly as before) rather than this script guessing at it first.
 
     t0=$(date +%s%N)
     if command -v hyprctl >/dev/null 2>&1 && hyprctl activewindow -j > "$WINDOW" 2>/dev/null; then
@@ -212,10 +215,13 @@ if [ -z "$FIXTURE" ]; then
   if [ ! -s "$SELECTION" ]; then
     wl-paste --no-newline > "$SELECTION" 2>/dev/null || true
   fi
-  if [ ! -s "$SELECTION" ]; then
-    notify-send "Omasnap" "Nothing selected" 2>/dev/null || true
-    exit 0
-  fi
+  # An empty selection is not a fast exit here (ADR-0010): a snap provider
+  # registered for the focused window's class is a complete,
+  # self-sufficient answer regardless of what's selected, so this script
+  # always hands off to `node lib/snap.mjs` below — the one place that
+  # already knows the provider registry — and lets it decide whether an
+  # empty selection is actually fatal (its own exit code 3, handled below,
+  # exactly as before).
 
   if command -v hyprctl >/dev/null 2>&1 && hyprctl activewindow -j > "$WINDOW" 2>/dev/null; then
     :
