@@ -126,18 +126,50 @@ FloatingWindow {
     readonly property real maxContentWidth: (previewWindow.screen ? previewWindow.screen.width : 1280) * fitFraction
     readonly property real maxContentHeight: (previewWindow.screen ? previewWindow.screen.height : 800) * fitFraction
 
-    // Fit-to-window scale for the code frame: never upscaled past 1, and
-    // never so large the window would exceed fitFraction of the screen in
-    // either dimension once the bar and margins are accounted for.
-    readonly property real fit: {
+    // Two scales, because the window's size and the frame's size can
+    // disagree. `idealFit` is the scale the frame would get in a window
+    // sized for it (never upscaled past 1, never so large the window would
+    // exceed fitFraction of the screen); it drives the window's ideal size.
+    // `fit` is the scale it actually gets, from the space the window really
+    // has, so the frame always fits and is never cropped even before (or
+    // without) the window being resized to match.
+    readonly property real idealFit: {
         if (!snapItem || snapItem.width <= 0 || snapItem.height <= 0) return 1;
         const byWidth = (maxContentWidth - 2 * margin) / snapItem.width;
         const byHeight = (maxContentHeight - barHeight - 2 * margin) / snapItem.height;
         return Math.min(1, byWidth, byHeight);
     }
+    readonly property real fit: {
+        if (!snapItem || snapItem.width <= 0 || snapItem.height <= 0) return 1;
+        return Math.min(1, stageArea.width / snapItem.width, stageArea.height / snapItem.height);
+    }
 
-    implicitWidth: Math.max(minWindowWidth, Math.min(snapItem.width * fit + 2 * margin, maxContentWidth))
-    implicitHeight: Math.min(snapItem.height * fit + barHeight + 2 * margin, maxContentHeight)
+    readonly property int idealWidth: Math.round(Math.max(minWindowWidth, Math.min(snapItem.width * idealFit + 2 * margin, maxContentWidth)))
+    readonly property int idealHeight: Math.round(Math.min(snapItem.height * idealFit + barHeight + 2 * margin, maxContentHeight))
+
+    implicitWidth: idealWidth
+    implicitHeight: idealHeight
+
+    // A `FloatingWindow` takes implicitWidth/implicitHeight only as a hint
+    // when it is first mapped (see `visible` above), so when the frame
+    // changes size later (a different wrap width or language), the window
+    // is asked to follow through Hyprland. Hyprland keeps the window's
+    // centre where it was, so a window the user has moved stays put. The
+    // dispatch carries only integers and this window's own fixed title.
+    // Debounced: a re-highlight settles the frame's size over a few
+    // bindings, and one resize at the end is enough.
+    onIdealWidthChanged: if (visible) resizeTimer.restart()
+    onIdealHeightChanged: if (visible) resizeTimer.restart()
+
+    Timer {
+        id: resizeTimer
+        interval: 60
+        onTriggered: {
+            if (previewWindow.width === previewWindow.idealWidth && previewWindow.height === previewWindow.idealHeight) return;
+            Hyprland.dispatch("hl.dsp.window.resize({ window = \"title:^(OmaCodeSnap)$\", x = "
+                + previewWindow.idealWidth + ", y = " + previewWindow.idealHeight + " })");
+        }
+    }
 
     color: colors ? colors.background : Qt.rgba(0, 0, 0, 1)
 
@@ -440,11 +472,16 @@ FloatingWindow {
                 height: Math.max(1, previewWindow.height - previewWindow.barHeight - 2 * previewWindow.margin)
                 clip: true
 
+                // Centred in whatever space the window has: scaled from
+                // the top-left corner, then offset by half the space left
+                // over in each direction.
                 Snap {
                     id: snapItem
                     input: previewWindow.input
                     scale: previewWindow.fit
                     transformOrigin: Item.TopLeft
+                    x: Math.max(0, (stageArea.width - width * previewWindow.fit) / 2)
+                    y: Math.max(0, (stageArea.height - height * previewWindow.fit) / 2)
 
                     onReadyChanged: if (ready) autoTimer.start()
                 }
