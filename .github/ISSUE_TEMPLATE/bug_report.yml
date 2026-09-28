@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in Omasnap is broken or looks wrong
+description: Something in OmaCodeSnap is broken or looks wrong
 labels: [bug]
 body:
   - type: textarea
@@ -34,7 +34,7 @@ body:
     id: version
     attributes:
       label: Version / commit
-      description: How you installed Omasnap (plugin store vs. dev checkout) and, if a checkout, `git rev-parse HEAD`.
+      description: How you installed OmaCodeSnap (plugin store vs. dev checkout) and, if a checkout, `git rev-parse HEAD`.
     validations:
       required: true
 
@@ -42,5 +42,5 @@ body:
     id: logs
     attributes:
       label: Relevant output
-      description: Anything printed to the terminal when running `bin/omasnap` directly, if applicable.
+      description: Anything printed to the terminal when running `bin/omacodesnap` directly, if applicable.
       render: shell

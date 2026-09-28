@@ -38,20 +38,20 @@ const VALID_FIXTURE = {
 // --- scanProviders -----------------------------------------------------------
 
 test("scanProviders: a nonexistent pluginsDir returns an empty array, never throws", () => {
-  const dir = scratchDir("omasnap-providers-missing-");
+  const dir = scratchDir("omacodesnap-providers-missing-");
   rmSync(dir, { recursive: true, force: true }); // never created
   assert.deepEqual(scanProviders(dir), []);
 });
 
-test("scanProviders: collects exactly the manifests with a valid omasnap.provider, skipping every malformed/absent sibling; windowClass is always the manifest's own id", () => {
-  const pluginsDir = scratchDir("omasnap-providers-scan-");
+test("scanProviders: collects exactly the manifests with a valid omacodesnap.provider, skipping every malformed/absent sibling; windowClass is always the manifest's own id", () => {
+  const pluginsDir = scratchDir("omacodesnap-providers-scan-");
   try {
     addPlugin(pluginsDir, "com.keithrowell.omawordl", {
       schemaVersion: 1,
       id: "com.keithrowell.omawordl",
       name: "OmaWordl",
       version: "1.0.0",
-      omasnap: { provider: "bin/omawordl-snap" },
+      omacodesnap: { provider: "bin/omawordl-snap" },
     });
 
     addPlugin(pluginsDir, "org.example.otherapp", {
@@ -59,10 +59,10 @@ test("scanProviders: collects exactly the manifests with a valid omasnap.provide
       id: "org.example.otherapp",
       name: "Other App",
       version: "1.0.0",
-      omasnap: { provider: "snap.sh" },
+      omacodesnap: { provider: "snap.sh" },
     });
 
-    // No omasnap key at all: unaffected, must not appear.
+    // No omacodesnap key at all: unaffected, must not appear.
     addPlugin(pluginsDir, "omarchy.clock", {
       schemaVersion: 1,
       id: "omarchy.clock",
@@ -73,16 +73,16 @@ test("scanProviders: collects exactly the manifests with a valid omasnap.provide
     // Malformed manifest.json: must not throw, must be skipped.
     addPlugin(pluginsDir, "broken.manifest", null, { manifestText: "{ this is not json" });
 
-    // omasnap present but missing the required provider field: skipped.
+    // omacodesnap present but missing the required provider field: skipped.
     addPlugin(pluginsDir, "no.provider.field", {
       schemaVersion: 1,
       id: "no.provider.field",
       name: "No Provider",
       version: "1.0.0",
-      omasnap: {},
+      omacodesnap: {},
     });
 
-    // A stray (ignored) omasnap.windowClass field, now that the field no
+    // A stray (ignored) omacodesnap.windowClass field, now that the field no
     // longer exists in the schema: windowClass must still come from `id`,
     // never from this leftover/foreign key.
     addPlugin(pluginsDir, "org.example.spoofattempt", {
@@ -90,7 +90,7 @@ test("scanProviders: collects exactly the manifests with a valid omasnap.provide
       id: "org.example.spoofattempt",
       name: "Spoof Attempt",
       version: "1.0.0",
-      omasnap: { provider: "snap.sh", windowClass: "org.example.somethingelse" },
+      omacodesnap: { provider: "snap.sh", windowClass: "org.example.somethingelse" },
     });
 
     const providers = scanProviders(pluginsDir);
@@ -107,19 +107,19 @@ test("scanProviders: collects exactly the manifests with a valid omasnap.provide
     assert.equal(otherapp.pluginDir, join(pluginsDir, "org.example.otherapp"));
 
     const spoofAttempt = providers.find((p) => p.pluginDir.endsWith("org.example.spoofattempt"));
-    assert.ok(spoofAttempt, "a stray omasnap.windowClass key is present but ignored");
+    assert.ok(spoofAttempt, "a stray omacodesnap.windowClass key is present but ignored");
     assert.equal(spoofAttempt.windowClass, "org.example.spoofattempt", "windowClass is the manifest's own id, not the stray key's value");
 
-    assert.ok(!providers.some((p) => p.pluginDir.endsWith("omarchy.clock")), "no omasnap key: skipped");
+    assert.ok(!providers.some((p) => p.pluginDir.endsWith("omarchy.clock")), "no omacodesnap key: skipped");
     assert.ok(!providers.some((p) => p.pluginDir.endsWith("broken.manifest")), "malformed manifest.json: skipped");
-    assert.ok(!providers.some((p) => p.pluginDir.endsWith("no.provider.field")), "omasnap present but no provider field: skipped");
+    assert.ok(!providers.some((p) => p.pluginDir.endsWith("no.provider.field")), "omacodesnap present but no provider field: skipped");
   } finally {
     rmSync(pluginsDir, { recursive: true, force: true });
   }
 });
 
 test("scanProviders: a manifest.json that parses to a non-object (array/string/number) is skipped, not thrown", () => {
-  const pluginsDir = scratchDir("omasnap-providers-nonobject-");
+  const pluginsDir = scratchDir("omacodesnap-providers-nonobject-");
   try {
     addPlugin(pluginsDir, "weird.array", null, { manifestText: "[1,2,3]" });
     addPlugin(pluginsDir, "weird.string", null, { manifestText: '"just a string"' });
@@ -130,7 +130,7 @@ test("scanProviders: a manifest.json that parses to a non-object (array/string/n
 });
 
 test("scanProviders: a non-directory, non-symlink entry inside pluginsDir (a stray file) is ignored", () => {
-  const pluginsDir = scratchDir("omasnap-providers-strayfile-");
+  const pluginsDir = scratchDir("omacodesnap-providers-strayfile-");
   try {
     writeFileSync(join(pluginsDir, "README.txt"), "not a plugin");
     assert.deepEqual(scanProviders(pluginsDir), []);
@@ -143,15 +143,15 @@ test("scanProviders: a non-directory, non-symlink entry inside pluginsDir (a str
 // dev checkout, or `omarchy plugin clone`) — `readdirSync`'s `Dirent`
 // reflects `lstat`, which reports `isDirectory() === false` for a symlink
 // even when it points at a real directory. 4 of 16 real plugins on the
-// machine this was built on, including Omasnap's own install, are
+// machine this was built on, including OmaCodeSnap's own install, are
 // symlinks — this must not silently exclude them.
 test("scanProviders: a symlinked plugin directory is scanned exactly like a real one", () => {
-  const pluginsDir = scratchDir("omasnap-providers-symlink-");
-  const realDir = scratchDir("omasnap-providers-symlink-target-");
+  const pluginsDir = scratchDir("omacodesnap-providers-symlink-");
+  const realDir = scratchDir("omacodesnap-providers-symlink-target-");
   try {
     writeFileSync(
       join(realDir, "manifest.json"),
-      JSON.stringify({ schemaVersion: 1, id: "com.keithrowell.symlinked", name: "Symlinked", version: "1.0.0", omasnap: { provider: "snap.sh" } }),
+      JSON.stringify({ schemaVersion: 1, id: "com.keithrowell.symlinked", name: "Symlinked", version: "1.0.0", omacodesnap: { provider: "snap.sh" } }),
     );
     symlinkSync(realDir, join(pluginsDir, "com.keithrowell.symlinked"));
 
@@ -166,13 +166,13 @@ test("scanProviders: a symlinked plugin directory is scanned exactly like a real
 });
 
 test("scanProviders: a manifest id matching a real editor's own window class is refused, not registered", () => {
-  const pluginsDir = scratchDir("omasnap-providers-hijack-");
+  const pluginsDir = scratchDir("omacodesnap-providers-hijack-");
   try {
     const zedClass = EDITOR_CLASSES.zed[0];
     addPlugin(
       pluginsDir,
       zedClass,
-      { schemaVersion: 1, id: zedClass, name: "Fake Zed", version: "1.0.0", omasnap: { provider: "snap.sh" } },
+      { schemaVersion: 1, id: zedClass, name: "Fake Zed", version: "1.0.0", omacodesnap: { provider: "snap.sh" } },
       { dirName: "fake-zed-plugin" },
     );
     assert.deepEqual(scanProviders(pluginsDir), []);
@@ -182,11 +182,11 @@ test("scanProviders: a manifest id matching a real editor's own window class is 
 });
 
 test("scanProviders: every EDITOR_CLASSES entry is refused as a provider id", () => {
-  const pluginsDir = scratchDir("omasnap-providers-hijack-all-");
+  const pluginsDir = scratchDir("omacodesnap-providers-hijack-all-");
   try {
     const allClasses = Object.values(EDITOR_CLASSES).flat();
     allClasses.forEach((cls, i) => {
-      addPlugin(pluginsDir, cls, { schemaVersion: 1, id: cls, name: "Fake", version: "1.0.0", omasnap: { provider: "snap.sh" } }, { dirName: `fake-${i}` });
+      addPlugin(pluginsDir, cls, { schemaVersion: 1, id: cls, name: "Fake", version: "1.0.0", omacodesnap: { provider: "snap.sh" } }, { dirName: `fake-${i}` });
     });
     assert.deepEqual(scanProviders(pluginsDir), []);
   } finally {
@@ -204,9 +204,9 @@ test("scanProviders: every EDITOR_CLASSES entry is refused as a provider id", ()
 // detection mechanism underneath, which the EDITOR_CLASSES-only refusal
 // list didn't cover.
 test('scanProviders: a manifest id matching a terminal class Neovim detection relies on (e.g. "foot") is refused, not registered', () => {
-  const pluginsDir = scratchDir("omasnap-providers-hijack-terminal-");
+  const pluginsDir = scratchDir("omacodesnap-providers-hijack-terminal-");
   try {
-    addPlugin(pluginsDir, "foot", { schemaVersion: 1, id: "foot", name: "Fake Foot Hijacker", version: "1.0.0", omasnap: { provider: "hijack.sh" } }, { dirName: "fake-foot-plugin" });
+    addPlugin(pluginsDir, "foot", { schemaVersion: 1, id: "foot", name: "Fake Foot Hijacker", version: "1.0.0", omacodesnap: { provider: "hijack.sh" } }, { dirName: "fake-foot-plugin" });
     assert.deepEqual(scanProviders(pluginsDir), []);
   } finally {
     rmSync(pluginsDir, { recursive: true, force: true });
@@ -214,10 +214,10 @@ test('scanProviders: a manifest id matching a terminal class Neovim detection re
 });
 
 test("scanProviders: every TERMINAL_CLASSES entry is refused as a provider id", () => {
-  const pluginsDir = scratchDir("omasnap-providers-hijack-terminal-all-");
+  const pluginsDir = scratchDir("omacodesnap-providers-hijack-terminal-all-");
   try {
     TERMINAL_CLASSES.forEach((cls, i) => {
-      addPlugin(pluginsDir, cls, { schemaVersion: 1, id: cls, name: "Fake", version: "1.0.0", omasnap: { provider: "snap.sh" } }, { dirName: `fake-term-${i}` });
+      addPlugin(pluginsDir, cls, { schemaVersion: 1, id: cls, name: "Fake", version: "1.0.0", omacodesnap: { provider: "snap.sh" } }, { dirName: `fake-term-${i}` });
     });
     assert.deepEqual(scanProviders(pluginsDir), []);
   } finally {
@@ -226,10 +226,10 @@ test("scanProviders: every TERMINAL_CLASSES entry is refused as a provider id", 
 });
 
 test("scanProviders: every TRANSIENT_CLASSES entry (keyring prompt, lock screen, Omarchy shell surfaces) is refused as a provider id", () => {
-  const pluginsDir = scratchDir("omasnap-providers-hijack-transient-");
+  const pluginsDir = scratchDir("omacodesnap-providers-hijack-transient-");
   try {
     TRANSIENT_CLASSES.forEach((cls, i) => {
-      addPlugin(pluginsDir, cls, { schemaVersion: 1, id: cls, name: "Fake", version: "1.0.0", omasnap: { provider: "snap.sh" } }, { dirName: `fake-transient-${i}` });
+      addPlugin(pluginsDir, cls, { schemaVersion: 1, id: cls, name: "Fake", version: "1.0.0", omacodesnap: { provider: "snap.sh" } }, { dirName: `fake-transient-${i}` });
     });
     assert.deepEqual(scanProviders(pluginsDir), []);
   } finally {
@@ -238,7 +238,7 @@ test("scanProviders: every TRANSIENT_CLASSES entry (keyring prompt, lock screen,
 });
 
 test("scanProviders: two different plugin directories resolving to the same windowClass keep the first, log a warning, and never register both", () => {
-  const pluginsDir = scratchDir("omasnap-providers-collision-");
+  const pluginsDir = scratchDir("omacodesnap-providers-collision-");
   try {
     // Directory names sort before/after each other predictably so the
     // "first" one is deterministic regardless of filesystem readdir order
@@ -246,13 +246,13 @@ test("scanProviders: two different plugin directories resolving to the same wind
     addPlugin(
       pluginsDir,
       "org.example.collide",
-      { schemaVersion: 1, id: "org.example.collide", name: "First", version: "1.0.0", omasnap: { provider: "first.sh" } },
+      { schemaVersion: 1, id: "org.example.collide", name: "First", version: "1.0.0", omacodesnap: { provider: "first.sh" } },
       { dirName: "aaa-first" },
     );
     addPlugin(
       pluginsDir,
       "org.example.collide",
-      { schemaVersion: 1, id: "org.example.collide", name: "Second", version: "1.0.0", omasnap: { provider: "second.sh" } },
+      { schemaVersion: 1, id: "org.example.collide", name: "Second", version: "1.0.0", omacodesnap: { provider: "second.sh" } },
       { dirName: "zzz-second" },
     );
 
@@ -287,8 +287,8 @@ test("findProvider: no match, or a falsy/non-string windowClass, returns null", 
 // --- runProvider: containment (Critical 1) --------------------------------------
 
 test("runProvider: an absolute command path outside pluginDir is refused, never executed", async () => {
-  const pluginDir = scratchDir("omasnap-providers-escape-abs-");
-  const probeDir = scratchDir("omasnap-providers-escape-abs-probe-");
+  const pluginDir = scratchDir("omacodesnap-providers-escape-abs-");
+  const probeDir = scratchDir("omacodesnap-providers-escape-abs-probe-");
   const probeFile = join(probeDir, "evidence.txt");
   try {
     const outsideScript = join(probeDir, "evil.mjs");
@@ -308,7 +308,7 @@ test("runProvider: an absolute command path outside pluginDir is refused, never 
 });
 
 test("runProvider: a ../ escape out of pluginDir is refused, never executed", async () => {
-  const parentDir = scratchDir("omasnap-providers-escape-rel-");
+  const parentDir = scratchDir("omacodesnap-providers-escape-rel-");
   const pluginDir = join(parentDir, "plugin");
   mkdirSync(pluginDir, { recursive: true });
   const probeFile = join(parentDir, "evidence.txt");
@@ -331,7 +331,7 @@ test("runProvider: a ../ escape out of pluginDir is refused, never executed", as
 });
 
 test("runProvider: a command that resolves inside pluginDir (including via a harmless ./ or nested path) still runs normally", async () => {
-  const pluginDir = scratchDir("omasnap-providers-contained-");
+  const pluginDir = scratchDir("omacodesnap-providers-contained-");
   try {
     mkdirSync(join(pluginDir, "bin"), { recursive: true });
     addScript(pluginDir, "bin/snap.mjs", `console.log(JSON.stringify(${JSON.stringify(VALID_FIXTURE)}));`);
@@ -345,7 +345,7 @@ test("runProvider: a command that resolves inside pluginDir (including via a har
 // --- runProvider: other failure modes -------------------------------------------
 
 test("runProvider: a clean exit with a valid fixture on stdout resolves to that fixture", async () => {
-  const pluginDir = scratchDir("omasnap-providers-run-ok-");
+  const pluginDir = scratchDir("omacodesnap-providers-run-ok-");
   try {
     addScript(pluginDir, "snap.mjs", `console.log(JSON.stringify(${JSON.stringify(VALID_FIXTURE)}));`);
     const fixture = await runProvider({ windowClass: "test.ok", command: "snap.mjs", pluginDir });
@@ -356,7 +356,7 @@ test("runProvider: a clean exit with a valid fixture on stdout resolves to that 
 });
 
 test("runProvider: a nonzero exit resolves to null, never throws/rejects", async () => {
-  const pluginDir = scratchDir("omasnap-providers-run-nonzero-");
+  const pluginDir = scratchDir("omacodesnap-providers-run-nonzero-");
   try {
     addScript(pluginDir, "snap.mjs", `console.error("boom"); process.exit(1);`);
     const fixture = await runProvider({ windowClass: "test.nonzero", command: "snap.mjs", pluginDir });
@@ -367,7 +367,7 @@ test("runProvider: a nonzero exit resolves to null, never throws/rejects", async
 });
 
 test("runProvider: invalid JSON on stdout resolves to null", async () => {
-  const pluginDir = scratchDir("omasnap-providers-run-badjson-");
+  const pluginDir = scratchDir("omacodesnap-providers-run-badjson-");
   try {
     addScript(pluginDir, "snap.mjs", `console.log("not json at all {");`);
     const fixture = await runProvider({ windowClass: "test.badjson", command: "snap.mjs", pluginDir });
@@ -378,7 +378,7 @@ test("runProvider: invalid JSON on stdout resolves to null", async () => {
 });
 
 test("runProvider: valid JSON that fails validateFixture (missing required fields) resolves to null", async () => {
-  const pluginDir = scratchDir("omasnap-providers-run-invalidfixture-");
+  const pluginDir = scratchDir("omacodesnap-providers-run-invalidfixture-");
   try {
     addScript(pluginDir, "snap.mjs", `console.log(JSON.stringify({ hello: "world" }));`);
     const fixture = await runProvider({ windowClass: "test.invalidfixture", command: "snap.mjs", pluginDir });
@@ -389,7 +389,7 @@ test("runProvider: valid JSON that fails validateFixture (missing required field
 });
 
 test("runProvider: a command that outlives timeoutMs is killed and resolves to null", async () => {
-  const pluginDir = scratchDir("omasnap-providers-run-timeout-");
+  const pluginDir = scratchDir("omacodesnap-providers-run-timeout-");
   try {
     addScript(pluginDir, "snap.mjs", `await new Promise((r) => setTimeout(r, 5000)); console.log(JSON.stringify(${JSON.stringify(VALID_FIXTURE)}));`);
     const start = Date.now();
@@ -407,7 +407,7 @@ test("runProvider: a command that outlives timeoutMs is killed and resolves to n
 // timeout indefinitely — `runProvider` must use `SIGKILL`, which cannot be
 // caught or ignored by the child at all.
 test("runProvider: a provider that ignores SIGTERM is still killed (via SIGKILL) at the timeout, not left running", async () => {
-  const pluginDir = scratchDir("omasnap-providers-run-sigterm-ignore-");
+  const pluginDir = scratchDir("omacodesnap-providers-run-sigterm-ignore-");
   try {
     addScript(
       pluginDir,
@@ -427,7 +427,7 @@ console.log(JSON.stringify(${JSON.stringify(VALID_FIXTURE)}));`,
 });
 
 test("runProvider: a command that does not exist resolves to null", async () => {
-  const pluginDir = scratchDir("omasnap-providers-run-missing-");
+  const pluginDir = scratchDir("omacodesnap-providers-run-missing-");
   try {
     const fixture = await runProvider({ windowClass: "test.missing", command: "does-not-exist.sh", pluginDir });
     assert.equal(fixture, null);
@@ -439,14 +439,14 @@ test("runProvider: a command that does not exist resolves to null", async () => 
 // --- manual end-to-end: discovery -> invocation, no mocking -------------------
 
 test("end to end: scanProviders finds a real fixture plugin dir and runProvider runs its real script", async () => {
-  const pluginsDir = scratchDir("omasnap-providers-e2e-");
+  const pluginsDir = scratchDir("omacodesnap-providers-e2e-");
   try {
     const pluginDir = addPlugin(pluginsDir, "com.keithrowell.omawordl", {
       schemaVersion: 1,
       id: "com.keithrowell.omawordl",
       name: "OmaWordl",
       version: "1.0.0",
-      omasnap: { provider: "bin/omawordl-snap" },
+      omacodesnap: { provider: "bin/omawordl-snap" },
     });
     mkdirSync(join(pluginDir, "bin"), { recursive: true });
     addScript(

@@ -101,13 +101,13 @@ test("readTheme reads vscode.json into vscode.descriptor", () => {
 });
 
 test("readTheme throws when colors.toml is missing", () => {
-  const dir = scratchDir("omasnap-theme-missing-colors-");
+  const dir = scratchDir("omacodesnap-theme-missing-colors-");
   assert.throws(() => readTheme(dir));
   rmSync(dir, { recursive: true, force: true });
 });
 
 test("readTheme picks the themes[] entry whose appearance matches mode", () => {
-  const dir = scratchDir("omasnap-theme-multi-");
+  const dir = scratchDir("omacodesnap-theme-multi-");
   writeFileSync(join(dir, "colors.toml"), 'mode = "dark"\n');
   writeFileSync(
     join(dir, "zed-theme.json"),
@@ -123,7 +123,7 @@ test("readTheme picks the themes[] entry whose appearance matches mode", () => {
 });
 
 test("readTheme falls back to themes[0] when no appearance matches", () => {
-  const dir = scratchDir("omasnap-theme-multi-nomatch-");
+  const dir = scratchDir("omacodesnap-theme-multi-nomatch-");
   writeFileSync(join(dir, "colors.toml"), 'mode = "dark"\n');
   writeFileSync(
     join(dir, "zed-theme.json"),
@@ -134,7 +134,7 @@ test("readTheme falls back to themes[0] when no appearance matches", () => {
 });
 
 test("readTheme returns null vscode when its file is absent, other keys still populated", () => {
-  const dir = scratchDir("omasnap-theme-noopt-");
+  const dir = scratchDir("omacodesnap-theme-noopt-");
   writeFileSync(join(dir, "colors.toml"), 'mode = "dark"\naccent = "#111111"\n');
   const t = readTheme(dir);
   assert.equal(t.vscode, null);
@@ -148,7 +148,7 @@ test("readTheme synthesizes a generic zed theme from colors.toml when zed-theme.
   // every one of those installs would render plain, uncoloured text (and,
   // before this, would have thrown inside highlight() the moment a
   // recognised language actually needed theme.zed.syntax).
-  const dir = scratchDir("omasnap-theme-synth-");
+  const dir = scratchDir("omacodesnap-theme-synth-");
   writeFileSync(
     join(dir, "colors.toml"),
     [
@@ -179,7 +179,7 @@ test("readTheme synthesizes a generic zed theme from colors.toml when zed-theme.
 });
 
 test("readTheme's synthesized zed theme never throws even when colors.toml is missing most keys", () => {
-  const dir = scratchDir("omasnap-theme-synth-minimal-");
+  const dir = scratchDir("omacodesnap-theme-synth-minimal-");
   writeFileSync(join(dir, "colors.toml"), 'mode = "dark"\n');
   const t = readTheme(dir);
   assert.notEqual(t.zed, null);
@@ -192,7 +192,7 @@ test("readTheme's synthesized zed theme never throws even when colors.toml is mi
 });
 
 test("readTheme resolves wallpaper as null when background is absent", () => {
-  const dir = scratchDir("omasnap-theme-nowallpaper-");
+  const dir = scratchDir("omacodesnap-theme-nowallpaper-");
   writeFileSync(join(dir, "colors.toml"), 'mode = "dark"\n');
   assert.equal(readTheme(dir).wallpaper, null);
   rmSync(dir, { recursive: true, force: true });
@@ -205,7 +205,7 @@ test("readTheme resolves wallpaper through a real symlink to its target", () => 
   // plugin validator forbids symlinks anywhere in the repo — ADR-0003), so
   // this behaviour is covered here with a symlink created at test time,
   // never committed.
-  const dir = scratchDir("omasnap-theme-symlink-");
+  const dir = scratchDir("omacodesnap-theme-symlink-");
   const themeDir = join(dir, "theme");
   const backgroundsDir = join(themeDir, "backgrounds");
   mkdirSync(backgroundsDir, { recursive: true });
@@ -218,7 +218,7 @@ test("readTheme resolves wallpaper through a real symlink to its target", () => 
 });
 
 test("readTheme resolves wallpaper as null when background is a dangling symlink", () => {
-  const dir = scratchDir("omasnap-theme-dangling-");
+  const dir = scratchDir("omacodesnap-theme-dangling-");
   const themeDir = join(dir, "theme");
   writeFileSync(join(dir, "theme.name"), "scratch\n");
   mkdirSync(themeDir, { recursive: true });
@@ -229,7 +229,7 @@ test("readTheme resolves wallpaper as null when background is a dangling symlink
 });
 
 test("readTheme falls back to the theme dir's basename when theme.name is missing", () => {
-  const dir = scratchDir("omasnap-theme-noname-");
+  const dir = scratchDir("omacodesnap-theme-noname-");
   writeFileSync(join(dir, "colors.toml"), 'mode = "dark"\n');
   const t = readTheme(dir);
   assert.equal(t.name, basename(dir));
@@ -237,7 +237,7 @@ test("readTheme falls back to the theme dir's basename when theme.name is missin
 });
 
 test("readTheme never caches: rereading after an edit sees the new value", () => {
-  const dir = scratchDir("omasnap-theme-nocache-");
+  const dir = scratchDir("omacodesnap-theme-nocache-");
   cpSync(GRUVBOX, dir, { recursive: true });
   const before = readTheme(dir).colors.accent;
   const text = readFileSync(join(dir, "colors.toml"), "utf8").replace(before, "#123456");

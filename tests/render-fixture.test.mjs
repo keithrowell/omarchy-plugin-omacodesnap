@@ -185,7 +185,7 @@ test("buildInput: a theme with no Zed file still colours from a synthesized one,
   // synthesizes a generic one from colors.toml (synthesizeZedTheme) rather
   // than leaving `zed` null, so this never falls all the way back to flat,
   // uncoloured text (tests/theme.test.mjs covers the synthesis itself).
-  const dir = scratchDir("omasnap-input-novscode-");
+  const dir = scratchDir("omacodesnap-input-novscode-");
   try {
     writeFileSync(
       join(dir, "colors.toml"),
@@ -278,7 +278,7 @@ test("parseThemeShellFont: [font] with no family key at all is null", () => {
 });
 
 test("readHeaderFont: the user shell.json wins over the theme's shell.toml and the code font", () => {
-  const dir = scratchDir("omasnap-headerfont-user-");
+  const dir = scratchDir("omacodesnap-headerfont-user-");
   try {
     mkdirSync(join(dir, "home", ".config", "omarchy"), { recursive: true });
     writeFileSync(join(dir, "home", ".config", "omarchy", "shell.json"), JSON.stringify({ font: { family: "UserFont" } }));
@@ -292,7 +292,7 @@ test("readHeaderFont: the user shell.json wins over the theme's shell.toml and t
 });
 
 test("readHeaderFont: falls back to the theme's shell.toml when there is no user shell.json", () => {
-  const dir = scratchDir("omasnap-headerfont-theme-");
+  const dir = scratchDir("omacodesnap-headerfont-theme-");
   try {
     mkdirSync(join(dir, "theme"), { recursive: true });
     writeFileSync(join(dir, "theme", "shell.toml"), '[font]\nfamily = "ThemeFont"\n');
@@ -304,7 +304,7 @@ test("readHeaderFont: falls back to the theme's shell.toml when there is no user
 });
 
 test("readHeaderFont: falls back to the code font when neither shell.json nor shell.toml set one", () => {
-  const dir = scratchDir("omasnap-headerfont-code-");
+  const dir = scratchDir("omacodesnap-headerfont-code-");
   try {
     mkdirSync(join(dir, "theme"), { recursive: true });
     writeFileSync(join(dir, "theme", "shell.toml"), "# no [font] section\n");

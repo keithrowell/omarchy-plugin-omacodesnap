@@ -9,8 +9,8 @@ const manifest = JSON.parse(readFileSync(resolve(ROOT, "manifest.json"), "utf8")
 
 test("manifest.json has the required Omarchy plugin fields", () => {
   assert.equal(manifest.schemaVersion, 1);
-  assert.equal(manifest.id, "com.keithrowell.omasnap");
-  assert.equal(manifest.name, "Omasnap");
+  assert.equal(manifest.id, "com.keithrowell.omacodesnap");
+  assert.equal(manifest.name, "OmaCodeSnap");
   // The manifest is the only place the version is written (a bump is one
   // edit, then a `v<version>` tag on the merge): check the shape, not a
   // pinned string, and make sure nothing else has grown a second copy.

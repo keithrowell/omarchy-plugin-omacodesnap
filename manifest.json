@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "id": "com.keithrowell.omasnap",
-  "name": "Omasnap",
-  "version": "0.11.1",
+  "id": "com.keithrowell.omacodesnap",
+  "name": "OmaCodeSnap",
+  "version": "0.12.0",
   "author": "Keith Rowell",
   "license": "MIT",
   "description": "Turn selected code into a beautiful, unmistakably Omarchy image for a social post, a doc, or a chat.",

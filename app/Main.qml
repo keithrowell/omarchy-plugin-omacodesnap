@@ -6,27 +6,27 @@ import Quickshell.Hyprland
 import "Grab.js" as Grab
 
 // Entry point for the standalone invocations of `qs -p app/Main.qml` (via
-// bin/omasnap's fixture/benchmark modes, or by hand for testing). The real
+// bin/omacodesnap's fixture/benchmark modes, or by hand for testing). The real
 // interactive path no longer runs through here at all — see ADR-0003:
-// `bin/omasnap` triggers the persistent `app/Service.qml`, loaded by the
+// `bin/omacodesnap` triggers the persistent `app/Service.qml`, loaded by the
 // Omarchy shell, over IPC instead. Three modes, chosen by environment
 // variables (`qs` forwards no CLI arguments to QML):
 //
-// - `OMASNAP_MODE=preview`: a standalone `Overlay.qml` for testing the
+// - `OMACODESNAP_MODE=preview`: a standalone `Overlay.qml` for testing the
 //   live preview UI without a running Omarchy shell or an enabled plugin
-//   — reads `OMASNAP_INPUT`/`OMASNAP_REQUEST`/etc. itself and quits the
+//   — reads `OMACODESNAP_INPUT`/`OMACODESNAP_REQUEST`/etc. itself and quits the
 //   process when the overlay closes (see the component below).
-// - `OMASNAP_INPUT` set (and not preview mode): render mode. Load the JSON
+// - `OMACODESNAP_INPUT` set (and not preview mode): render mode. Load the JSON
 //   at that path (built by `lib/input.mjs` from a fixture and the current
 //   theme), show it in `Snap`, and once it settles, grab it to a PNG at
-//   `OMASNAP_OUT` and quit.
+//   `OMACODESNAP_OUT` and quit.
 // - Otherwise: the placeholder window from spec 0001.
 ShellRoot {
     id: root
 
-    readonly property string mode: Quickshell.env("OMASNAP_MODE") || ""
-    readonly property string inputPath: Quickshell.env("OMASNAP_INPUT") || ""
-    readonly property string outPath: Quickshell.env("OMASNAP_OUT") || ""
+    readonly property string mode: Quickshell.env("OMACODESNAP_MODE") || ""
+    readonly property string inputPath: Quickshell.env("OMACODESNAP_INPUT") || ""
+    readonly property string outPath: Quickshell.env("OMACODESNAP_OUT") || ""
 
     // How long after `Snap.ready` becomes true to wait before grabbing, so
     // the last frame (blur, SVG decode) has settled.
@@ -53,19 +53,19 @@ ShellRoot {
     // still be exercised with a bare `qs -p app/Main.qml`, no running shell
     // or enabled plugin required, the way it always could. It fills the
     // same properties Service.qml passes as IPC arguments, from the same
-    // environment variables `bin/omasnap` used to set before ADR-0003.
+    // environment variables `bin/omacodesnap` used to set before ADR-0003.
     // Overlay.qml never calls `Qt.quit()` itself (see its header comment),
     // so this wrapper quits the process when the overlay reports closed.
     Component {
         id: previewWindow
 
         Overlay {
-            inputPath: Quickshell.env("OMASNAP_INPUT") || ""
-            requestPath: Quickshell.env("OMASNAP_REQUEST") || ""
-            rootDir: Quickshell.env("OMASNAP_ROOT") || ""
-            previewPngPath: Quickshell.env("OMASNAP_PREVIEW_PNG") || ""
-            autoMode: Quickshell.env("OMASNAP_AUTO") || ""
-            shotPathOverride: Quickshell.env("OMASNAP_SHOT_PATH") || ""
+            inputPath: Quickshell.env("OMACODESNAP_INPUT") || ""
+            requestPath: Quickshell.env("OMACODESNAP_REQUEST") || ""
+            rootDir: Quickshell.env("OMACODESNAP_ROOT") || ""
+            previewPngPath: Quickshell.env("OMACODESNAP_PREVIEW_PNG") || ""
+            autoMode: Quickshell.env("OMACODESNAP_AUTO") || ""
+            shotPathOverride: Quickshell.env("OMACODESNAP_SHOT_PATH") || ""
 
             Component.onCompleted: overlayClosed.connect(Qt.quit)
         }
@@ -76,7 +76,7 @@ ShellRoot {
 
         FloatingWindow {
             id: renderFloating
-            title: "Omasnap"
+            title: "OmaCodeSnap"
             implicitWidth: snapItem.width > 0 ? snapItem.width : 640
             implicitHeight: snapItem.height > 0 ? snapItem.height : 360
 
@@ -168,7 +168,7 @@ ShellRoot {
 
         FloatingWindow {
             id: window
-            title: "Omasnap"
+            title: "OmaCodeSnap"
             implicitWidth: 640
             implicitHeight: 360
 
@@ -224,7 +224,7 @@ ShellRoot {
 
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: "Omasnap"
+                        text: "OmaCodeSnap"
                         textFormat: Text.PlainText
                         color: window.themeForeground !== "" ? window.themeForeground : systemPalette.windowText
                         font.family: "monospace"

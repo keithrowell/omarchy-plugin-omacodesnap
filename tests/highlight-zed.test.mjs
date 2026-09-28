@@ -437,7 +437,7 @@ test("highlight(): a recognised language against a theme with no zed-theme.json 
 });
 
 test("highlight(): a missing grammar .so warns and degrades to plain spans, never throws", () => {
-  const empty = mkdtempSync(join(tmpdir(), "omasnap-empty-root-"));
+  const empty = mkdtempSync(join(tmpdir(), "omacodesnap-empty-root-"));
   try {
     const result = highlight({ text: "const x = 1;\n", language: "javascript", theme: GRUVBOX, root: empty });
     assert.equal(result.warnings.length, 1);

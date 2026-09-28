@@ -112,7 +112,7 @@ Item {
     // this mirrors on the code's own font size instead of the shell's —
     // minus PanelHero's icon slot: every stock user of that pattern (the
     // Tailscale panel, the Dropbox panel, the agents panel) puts *its own*
-    // icon there, never the platform's; Omasnap has no icon of its own, so
+    // icon there, never the platform's; OmaCodeSnap has no icon of its own, so
     // ADR-0008 leaves the slot out rather than filling it with Omarchy's) ---
     readonly property real headerSpacingFactor: 2
     readonly property real headerTitleFactor: 1.167

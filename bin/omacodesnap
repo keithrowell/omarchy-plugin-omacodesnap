@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Launch Omasnap as a standalone Quickshell process.
+# Launch OmaCodeSnap as a standalone Quickshell process.
 #
-#   bin/omasnap                                                    # live: snap the current selection and preview it
-#   bin/omasnap --benchmark [--language X]                          # time the non-window steps of the live path
-#   bin/omasnap --fixture F --out P [--theme-dir D] [--wallpaper W] # headless fixture render
+#   bin/omacodesnap                                                    # live: snap the current selection and preview it
+#   bin/omacodesnap --benchmark [--language X]                          # time the non-window steps of the live path
+#   bin/omacodesnap --fixture F --out P [--theme-dir D] [--wallpaper W] # headless fixture render
 #
 # Live mode (see the plan for spec 0006) never puts the selection text in a
 # shell variable, argv, or a shell invocation: `wl-paste` writes straight to
@@ -14,7 +14,7 @@
 #
 # Fixture/render mode runs `lib/input.mjs` with Node to build one JSON input
 # (the fixture's spans resolved against a theme), then starts `qs` with
-# OMASNAP_INPUT/OMASNAP_OUT set; `app/Main.qml`'s render mode grabs the
+# OMACODESNAP_INPUT/OMACODESNAP_OUT set; `app/Main.qml`'s render mode grabs the
 # frame to `--out` and quits. See the plan for spec 0004.
 set -euo pipefail
 
@@ -32,12 +32,12 @@ set -euo pipefail
 umask 077
 
 usage() {
-  echo "usage: bin/omasnap [--benchmark] [--language X]"
-  echo "       bin/omasnap --fixture F --out P [--theme-dir D] [--wallpaper W]"
+  echo "usage: bin/omacodesnap [--benchmark] [--language X]"
+  echo "       bin/omacodesnap --fixture F --out P [--theme-dir D] [--wallpaper W]"
 }
 
 if ! command -v qs >/dev/null 2>&1; then
-  echo "omasnap: 'qs' (Quickshell) was not found on PATH." >&2
+  echo "omacodesnap: 'qs' (Quickshell) was not found on PATH." >&2
   echo "Install it with: sudo pacman -S quickshell" >&2
   exit 1
 fi
@@ -48,7 +48,7 @@ ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 # following value, e.g. a trailing `--out` with nothing after it.
 require_value() {
   if [ "$#" -lt 2 ]; then
-    echo "omasnap: $1 requires a value" >&2
+    echo "omacodesnap: $1 requires a value" >&2
     usage >&2
     exit 2
   fi
@@ -62,7 +62,7 @@ require_value() {
 # shouldn't be handling a selection anyway.
 require_runtime_dir() {
   if [ -z "${XDG_RUNTIME_DIR:-}" ]; then
-    echo "omasnap: XDG_RUNTIME_DIR is not set; refusing to fall back to shared /tmp" >&2
+    echo "omacodesnap: XDG_RUNTIME_DIR is not set; refusing to fall back to shared /tmp" >&2
     exit 1
   fi
   printf '%s\n' "$XDG_RUNTIME_DIR"
@@ -78,14 +78,14 @@ require_runtime_dir() {
 verify_private_dir() {
   local dir="$1"
   if [ -L "$dir" ] || [ ! -d "$dir" ]; then
-    echo "omasnap: $dir exists and is not a plain directory; refusing to use it" >&2
+    echo "omacodesnap: $dir exists and is not a plain directory; refusing to use it" >&2
     exit 1
   fi
   local owner mode
   owner="$(stat -c '%u' "$dir")"
   mode="$(stat -c '%a' "$dir")"
   if [ "$owner" != "$(id -u)" ] || [ "$mode" != "700" ]; then
-    echo "omasnap: $dir is not a private directory (owner $owner, mode $mode); refusing to use it" >&2
+    echo "omacodesnap: $dir is not a private directory (owner $owner, mode $mode); refusing to use it" >&2
     exit 1
   fi
 }
@@ -105,13 +105,13 @@ while [ $# -gt 0 ]; do
     --benchmark) BENCHMARK=1; shift ;;
     --language) require_value "$@"; LANGUAGE="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
-    *) echo "omasnap: unknown option '$1'" >&2; usage >&2; exit 2 ;;
+    *) echo "omacodesnap: unknown option '$1'" >&2; usage >&2; exit 2 ;;
   esac
 done
 
 if [ -z "$FIXTURE" ]; then
   if ! command -v node >/dev/null 2>&1; then
-    echo "omasnap: 'node' was not found on PATH." >&2
+    echo "omacodesnap: 'node' was not found on PATH." >&2
     echo "Install it with: sudo pacman -S nodejs" >&2
     exit 1
   fi
@@ -121,7 +121,7 @@ if [ -z "$FIXTURE" ]; then
   # the highlighter itself still renders (in plain text, uncoloured) rather
   # than failing, so this is a hint, not a blocker.
   if [ -x "$ROOT/bin/build-grammars" ] && ! "$ROOT/bin/build-grammars" --check >/dev/null 2>&1; then
-    echo "omasnap: some Zed grammars are not built yet; run bin/install (highlighting will be plain text until then)" >&2
+    echo "omacodesnap: some Zed grammars are not built yet; run bin/install (highlighting will be plain text until then)" >&2
   fi
 
   # Per-run files under a 0700 directory, each file itself 0600 (the
@@ -131,7 +131,7 @@ if [ -z "$FIXTURE" ]; then
   # common case). All five are cleaned up on exit by default — correct for
   # benchmark mode and for every early failure below (nothing selected,
   # `node lib/snap.mjs` failing) — right up until the live path's IPC call
-  # to the Omasnap shell service actually succeeds, at which point the trap
+  # to the OmaCodeSnap shell service actually succeeds, at which point the trap
   # narrows to just SELECTION/WINDOW (see there): that call returns
   # immediately, long before the preview it triggered is closed, and the
   # overlay reads REQUEST (re-highlighting from it when the language
@@ -140,7 +140,7 @@ if [ -z "$FIXTURE" ]; then
   # *into* REQUEST rather than recording their paths: SELECTION and WINDOW
   # are gone the moment this script exits. `app/Service.qml` deletes its own
   # three files once that overlay actually closes (ADR-0003).
-  RUNTIME_DIR="$(require_runtime_dir)/omasnap"
+  RUNTIME_DIR="$(require_runtime_dir)/omacodesnap"
   mkdir -p -m 700 "$RUNTIME_DIR"
   verify_private_dir "$RUNTIME_DIR"
   # Unpredictable names, not `-$$` (a PID is guessable/visible to any other
@@ -203,7 +203,7 @@ if [ -z "$FIXTURE" ]; then
     echo "total: $(( (total_end - total_start) / 1000000 )) ms"
 
     if [ "$status" -eq 3 ]; then
-      notify-send "Omasnap" "Nothing selected" 2>/dev/null || true
+      notify-send "OmaCodeSnap" "Nothing selected" 2>/dev/null || true
       exit 0
     elif [ "$status" -ne 0 ]; then
       exit 1
@@ -234,10 +234,10 @@ if [ -z "$FIXTURE" ]; then
   status=$?
   set -e
   if [ "$status" -eq 3 ]; then
-    notify-send "Omasnap" "Nothing selected" 2>/dev/null || true
+    notify-send "OmaCodeSnap" "Nothing selected" 2>/dev/null || true
     exit 0
   elif [ "$status" -ne 0 ]; then
-    notify-send "Omasnap" "Omasnap failed (see terminal)" 2>/dev/null || true
+    notify-send "OmaCodeSnap" "OmaCodeSnap failed (see terminal)" 2>/dev/null || true
     exit 1
   fi
 
@@ -254,18 +254,18 @@ if [ -z "$FIXTURE" ]; then
   # app/Service.qml, loaded by the shell as long as this plugin is enabled,
   # replaces any preview it already has open before creating this one — the
   # direct replacement for the old design's `qs kill -p .../Main.qml`. The
-  # last two arguments are the OMASNAP_AUTO/OMASNAP_SHOT_PATH testing hooks;
+  # last two arguments are the OMACODESNAP_AUTO/OMACODESNAP_SHOT_PATH testing hooks;
   # a normal snap always passes them empty. Testing that path means calling
   # this IPC target directly, the same way testers previously ran
   # `qs -p app/Main.qml` directly with those two set as environment
   # variables, bypassing this script either way.
   IPC_ERROR="$(mktemp "$RUNTIME_DIR/ipc-error-XXXXXXXX.txt")"
-  if ! omarchy-shell omasnap show "$INPUT" "$REQUEST" "$ROOT" "$PREVIEW_PNG" "" "" 2>"$IPC_ERROR"; then
+  if ! omarchy-shell omacodesnap show "$INPUT" "$REQUEST" "$ROOT" "$PREVIEW_PNG" "" "" 2>"$IPC_ERROR"; then
     err="$(cat "$IPC_ERROR" 2>/dev/null)"
     rm -f "$IPC_ERROR"
-    echo "omasnap: could not reach the Omasnap shell service ($err)" >&2
-    echo "omasnap: is the Omarchy shell running, and is the plugin enabled? Run: omarchy plugin enable com.keithrowell.omasnap" >&2
-    notify-send "Omasnap" "Not enabled — run: omarchy plugin enable com.keithrowell.omasnap" 2>/dev/null || true
+    echo "omacodesnap: could not reach the OmaCodeSnap shell service ($err)" >&2
+    echo "omacodesnap: is the Omarchy shell running, and is the plugin enabled? Run: omarchy plugin enable com.keithrowell.omacodesnap" >&2
+    notify-send "OmaCodeSnap" "Not enabled — run: omarchy plugin enable com.keithrowell.omacodesnap" 2>/dev/null || true
     # The IPC call never reached a service, so no overlay now owns REQUEST/
     # INPUT/PREVIEW_PNG — leave the default (all five) trap in place.
     exit 1
@@ -284,13 +284,13 @@ if [ -z "$FIXTURE" ]; then
 fi
 
 if [ -z "$OUT" ]; then
-  echo "omasnap: --out is required with --fixture" >&2
+  echo "omacodesnap: --out is required with --fixture" >&2
   usage >&2
   exit 2
 fi
 
 if ! command -v node >/dev/null 2>&1; then
-  echo "omasnap: 'node' was not found on PATH." >&2
+  echo "omacodesnap: 'node' was not found on PATH." >&2
   echo "Install it with: sudo pacman -S nodejs" >&2
   exit 1
 fi
@@ -304,12 +304,12 @@ fi
 # `/x.png`. Checking the directory explicitly first fails loudly instead.
 OUT_DIR="$(dirname "$OUT")"
 if [ ! -d "$OUT_DIR" ]; then
-  echo "omasnap: --out's directory '$OUT_DIR' does not exist" >&2
+  echo "omacodesnap: --out's directory '$OUT_DIR' does not exist" >&2
   exit 2
 fi
 OUT="$(readlink -f "$OUT_DIR")/$(basename "$OUT")"
 
-RUNTIME_DIR="$(require_runtime_dir)/omasnap"
+RUNTIME_DIR="$(require_runtime_dir)/omacodesnap"
 mkdir -p -m 700 "$RUNTIME_DIR"
 verify_private_dir "$RUNTIME_DIR"
 INPUT="$(mktemp "$RUNTIME_DIR/input-XXXXXXXX.json")"
@@ -326,11 +326,11 @@ fi
 # `set -e` propagates a non-zero exit from either command below as this
 # script's own exit status.
 node "$ROOT/lib/input.mjs" "${INPUT_ARGS[@]}" > "$INPUT"
-OMASNAP_INPUT="$INPUT" OMASNAP_OUT="$OUT" qs -p "$ROOT/app/Main.qml"
+OMACODESNAP_INPUT="$INPUT" OMACODESNAP_OUT="$OUT" qs -p "$ROOT/app/Main.qml"
 
 if [ -s "$OUT" ]; then
   echo "wrote $OUT"
 else
-  echo "omasnap: qs exited 0 but $OUT is missing or empty" >&2
+  echo "omacodesnap: qs exited 0 but $OUT is missing or empty" >&2
   exit 1
 fi

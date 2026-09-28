@@ -4,22 +4,22 @@ import Quickshell.Io
 
 // Marketplace entry point (ADR-0003): the Omarchy shell loads exactly one
 // of these, once, for as long as this plugin is enabled
-// (`omarchy plugin enable com.keithrowell.omasnap`), parented under its
+// (`omarchy plugin enable com.keithrowell.omacodesnap`), parented under its
 // own non-visual `serviceHost` item — see `shell.qml`'s `ensureService()`.
-// It owns no UI itself; it only exposes an IPC target so `bin/omasnap`
+// It owns no UI itself; it only exposes an IPC target so `bin/omacodesnap`
 // (already running the selection/highlight pipeline as a plain script) can
 // ask the *already-running* shell to show a preview, instead of spawning a
 // fresh `qs` process per snap the way the old standalone design did.
 //
-//   qs ipc call omasnap show <input> <request> <root> <previewPng> <auto> <shotPath>
-//   omarchy-shell omasnap show <input> <request> <root> <previewPng> <auto> <shotPath>
+//   qs ipc call omacodesnap show <input> <request> <root> <previewPng> <auto> <shotPath>
+//   omarchy-shell omacodesnap show <input> <request> <root> <previewPng> <auto> <shotPath>
 //
 // A second call while a preview is already open destroys the old one first
 // — the direct replacement for the old design's `qs kill -p .../Main.qml`.
 //
 // `inputPath`/`requestPath`/`previewPngPath` are per-run scratch files
-// under `$XDG_RUNTIME_DIR/omasnap/`; the old standalone-process design let
-// `bin/omasnap`'s own EXIT trap delete them once `qs` (which it ran
+// under `$XDG_RUNTIME_DIR/omacodesnap/`; the old standalone-process design let
+// `bin/omacodesnap`'s own EXIT trap delete them once `qs` (which it ran
 // synchronously) finished. Now that call returns immediately, long before
 // the overlay it triggered is closed — the overlay reads `requestPath` and
 // writes `previewPngPath` for as long as it stays open, potentially
@@ -40,7 +40,7 @@ QtObject {
 
     // The one live Overlay instance, or null, and the scratch files it was
     // given — tracked together so a second `show()` (replacing an open
-    // preview) and a self-close (Esc, Close, an OMASNAP_AUTO run finishing)
+    // preview) and a self-close (Esc, Close, an OMACODESNAP_AUTO run finishing)
     // both retire the same way.
     property var _overlay: null
     property var _overlayFiles: null
@@ -63,7 +63,7 @@ QtObject {
         }
         const component = Qt.createComponent(Qt.resolvedUrl("Overlay.qml"));
         if (component.status !== Component.Ready) {
-            console.error("omasnap: failed to load Overlay.qml: " + component.errorString());
+            console.error("omacodesnap: failed to load Overlay.qml: " + component.errorString());
             return;
         }
         const overlay = component.createObject(root, {
@@ -75,7 +75,7 @@ QtObject {
             shotPathOverride: shotPath,
         });
         if (overlay === null) {
-            console.error("omasnap: could not create the preview window");
+            console.error("omacodesnap: could not create the preview window");
             return;
         }
         overlay.overlayClosed.connect(function () { root._retire(overlay); });
@@ -135,11 +135,11 @@ QtObject {
         const built = lines.some((line) => line.startsWith("grammar: built"));
         const problems = lines.filter((line) => /missing|failed/i.test(line));
         if (problems.length > 0) {
-            console.warn("omasnap: bin/install reported a problem:\n" + problems.join("\n"));
-            root.notifyProcess.command = ["notify-send", "Omasnap", "Setup found a problem:\n" + problems.join("\n")];
+            console.warn("omacodesnap: bin/install reported a problem:\n" + problems.join("\n"));
+            root.notifyProcess.command = ["notify-send", "OmaCodeSnap", "Setup found a problem:\n" + problems.join("\n")];
             root.notifyProcess.running = true;
         } else if (built) {
-            root.notifyProcess.command = ["notify-send", "Omasnap", "Ready to snap — highlighting grammars just finished compiling."];
+            root.notifyProcess.command = ["notify-send", "OmaCodeSnap", "Ready to snap — highlighting grammars just finished compiling."];
             root.notifyProcess.running = true;
         }
     }
@@ -159,7 +159,7 @@ QtObject {
     // `QtObject` has no default property, unlike `Item`, so the handler
     // must be assigned explicitly rather than nested as a plain child.
     property IpcHandler ipc: IpcHandler {
-        target: "omasnap"
+        target: "omacodesnap"
 
         function show(inputPath: string, requestPath: string, rootDir: string, previewPngPath: string, auto: string, shotPath: string): void {
             root.show(inputPath, requestPath, rootDir, previewPngPath, auto, shotPath);

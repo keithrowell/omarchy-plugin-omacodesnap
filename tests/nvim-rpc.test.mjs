@@ -134,7 +134,7 @@ test("TERMINAL_CLASSES includes Omarchy's four themed terminals", () => {
 // --- live integration test (real nvim, skipped if not installed) -----------
 
 test("live: discoverNvimAddress + queryNvim against a real headless Neovim", { skip: !HAS_NVIM }, async () => {
-  const dir = mkdtempSync(join(tmpdir(), "omasnap-nvim-"));
+  const dir = mkdtempSync(join(tmpdir(), "omacodesnap-nvim-"));
   const file = join(dir, "sample.js");
   writeFileSync(file, "const x = 1;\n");
 

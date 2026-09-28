@@ -1,4 +1,4 @@
-// Sample fixture for the Omasnap highlight-path spike.
+// Sample fixture for the OmaCodeSnap highlight-path spike.
 // Exercises comments, strings, template literals, regex, numbers, classes,
 // decorators (as comments, since plain JS lacks them), keywords and builtins.
 
@@ -48,7 +48,7 @@ async function main() {
   const contents = await readFile("./fixtures/sample.js", "utf8");
   const snippet = new Snippet(contents);
   await snippet.tokenize();
-  console.log(greet("Omasnap"), snippet.tokenCount, contents.length > 0);
+  console.log(greet("OmaCodeSnap"), snippet.tokenCount, contents.length > 0);
 }
 
 main().catch((err) => {

@@ -1,4 +1,4 @@
-# Omasnap
+# OmaCodeSnap
 
 Share code snaps in Omarchy style with ease.
 
@@ -26,9 +26,9 @@ Markdown, Ruby, Lua. Everything else renders as plain text.
 
 ## Beta
 
-Omasnap is in beta. It works end to end on real hardware, but it has had
+OmaCodeSnap is in beta. It works end to end on real hardware, but it has had
 one desk's worth of testing. If you use Omarchy and post code, please try
-it and [report what breaks](https://github.com/keithrowell/omarchy-plugin-omasnap/issues).
+it and [report what breaks](https://github.com/keithrowell/omarchy-plugin-omacodesnap/issues).
 
 Want your editor supported? Adding one is a single file under
 `lib/editors/` — see [CONTRIBUTING.md](CONTRIBUTING.md). Pull requests
@@ -37,7 +37,7 @@ welcome; so are issues that just say which editor.
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/keithrowell/omarchy-plugin-omasnap.git --enable
+omarchy plugin add https://github.com/keithrowell/omarchy-plugin-omacodesnap.git --enable
 ```
 
 That's the install. The plugin sets itself up the first time the shell
@@ -48,13 +48,13 @@ missing.
 Then add the binding to `~/.config/hypr/bindings.lua`:
 
 ```lua
--- Omasnap: snap the selected code into an Omarchy-styled image.
-o.bind("SUPER + ALT + SHIFT + S", "Omasnap", "~/.config/omarchy/plugins/com.keithrowell.omasnap/bin/omasnap")
-o.window({ title = "^(Omasnap)$" }, { float = true, center = true })
+-- OmaCodeSnap: snap the selected code into an Omarchy-styled image.
+o.bind("SUPER + ALT + SHIFT + S", "OmaCodeSnap", "~/.config/omarchy/plugins/com.keithrowell.omacodesnap/bin/omacodesnap")
+o.window({ title = "^(OmaCodeSnap)$" }, { float = true, center = true })
 ```
 
-Update with `omarchy plugin update com.keithrowell.omasnap`. Remove with
-`omarchy plugin remove com.keithrowell.omasnap` and delete the binding.
+Update with `omarchy plugin update com.keithrowell.omacodesnap`. Remove with
+`omarchy plugin remove com.keithrowell.omacodesnap` and delete the binding.
 
 It needs these packages, most of which Omarchy already ships. The
 installer checks this exact line and tells you if anything is missing:
@@ -69,7 +69,7 @@ Select some code and press **SUPER + ALT + SHIFT + S**. A preview window
 appears in about a second.
 
 - **Enter** or **Copy** puts the PNG on the clipboard.
-- **S** or **Save** writes it to `~/Pictures` as `omasnap-<date>_<time>.png`.
+- **S** or **Save** writes it to `~/Pictures` as `omacodesnap-<date>_<time>.png`.
 - The language button bottom-left shows what was detected. Click it, or
   press **Left**/**Right**, to pick another language or plain text. The
   image redraws.
@@ -81,29 +81,29 @@ switching Omarchy themes changes the next image with no restart.
 
 ## How it works with editors
 
-Omasnap never installs anything into your editor. It reads the Wayland
+OmaCodeSnap never installs anything into your editor. It reads the Wayland
 primary selection (what you've highlighted) and asks Hyprland which window
 is focused. From there it depends on the editor.
 
-**Zed.** Omasnap ships the same tree-sitter grammars and highlight queries
+**Zed.** OmaCodeSnap ships the same tree-sitter grammars and highlight queries
 Zed uses, pinned to the versions Zed pins, and colours the result from the
 Omarchy theme's Zed colours. Most Omarchy themes don't ship a Zed theme
-file, so Omasnap builds one from the theme's `colors.toml`.
+file, so OmaCodeSnap builds one from the theme's `colors.toml`.
 
-**VS Code.** Omasnap runs the same TextMate tokenizer VS Code does, using
+**VS Code.** OmaCodeSnap runs the same TextMate tokenizer VS Code does, using
 the grammar from your installed VS Code (built in or from an extension),
 and colours it from whatever theme VS Code is actually showing. If you run
 Nord in VS Code, your snap is Nord. Languages with no static grammar, such
 as Rust and Go, fall back to the generic highlighting.
 
-**Neovim.** Neovim lives in a terminal, so Omasnap finds it in the
+**Neovim.** Neovim lives in a terminal, so OmaCodeSnap finds it in the
 terminal's process tree and asks the running Neovim, over its RPC socket,
 for the current visual selection and the colours it's drawing. Nothing is
 re-highlighted, so plugins, colorschemes and LSP tokens all come through.
-This is the one editor where Omasnap takes the selection from the editor
+This is the one editor where OmaCodeSnap takes the selection from the editor
 rather than from Wayland.
 
-**Everything else.** The text is highlighted with Omasnap's own Zed
+**Everything else.** The text is highlighted with OmaCodeSnap's own Zed
 grammars in the theme's colours, or left plain if the language isn't
 recognised.
 
@@ -113,7 +113,7 @@ corner radius, read live from `hyprctl`.
 
 ## Gallery
 
-Eight snippets, eight themes, every image made by Omasnap. See
+Eight snippets, eight themes, every image made by OmaCodeSnap. See
 [`docs/gallery/SOURCES.md`](docs/gallery/SOURCES.md) for where each piece
 of code came from and how to reproduce a render.
 

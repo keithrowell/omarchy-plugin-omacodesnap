@@ -1,4 +1,4 @@
--- Omasnap's Neovim probe: runs *inside* the target Neovim instance (via
+-- OmaCodeSnap's Neovim probe: runs *inside* the target Neovim instance (via
 -- `nvim --server <addr> --remote-expr`, see `lib/nvim-rpc.mjs`), asking
 -- Neovim itself for its current visual selection and the exact colours it
 -- is already rendering for it — `vim.treesitter.get_captures_at_pos()` for
@@ -41,7 +41,7 @@ local function style_at(row, col)
   return hl_style("@" .. capture) or hl_style("Normal") or { fg = nil, bold = false, italic = false }
 end
 
--- One line's text sliced to `[fromCol, toCol]` (0-based, end-exclusive; `nil` = full line), spans merged like every other Omasnap highlighter.
+-- One line's text sliced to `[fromCol, toCol]` (0-based, end-exclusive; `nil` = full line), spans merged like every other OmaCodeSnap highlighter.
 local function line_spans(row, fromCol, toCol)
   local line = vim.api.nvim_buf_get_lines(0, row, row + 1, false)[1] or ""
   local from = fromCol or 0

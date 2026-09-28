@@ -2,7 +2,7 @@
 
 | Image | Code | Theme |
 |---|---|---|
-| `../hero.png` (README) | `commonIndent`/`sharedPrefix` from Omasnap's own `lib/indent.mjs` — JavaScript, snapped as from Zed | Gruvbox (dark) |
+| `../hero.png` (README) | `commonIndent`/`sharedPrefix` from OmaCodeSnap's own `lib/indent.mjs` — JavaScript, snapped as from Zed | Gruvbox (dark) |
 | `01-ruby-push-kanagawa.png` | A realtime push demo, cut down from DaisyStack's own — Ruby | Kanagawa |
 | `02-go-ristretto.png` | A bounded worker pool — Go | Ristretto |
 | `03-rust-catppuccin.png` | `sigmoid`/`softmax` — Rust | Catppuccin |
@@ -36,7 +36,7 @@
 
 ## How the last four are coloured
 
-Omasnap has no tree-sitter grammar for Fortran, Delphi, VAX assembly, or
+OmaCodeSnap has no tree-sitter grammar for Fortran, Delphi, VAX assembly, or
 6809 assembly — realistically, it may never need one; these exist to show
 the frame works for anything, not to promise real support for them. Their
 spans were hand-tokenized (`docs/gallery/hand-tokenize.mjs`, a small regex
@@ -48,7 +48,7 @@ word gets which capture* was made by hand instead of by a parser.
 ## Theme provenance
 
 **Kanagawa**, **Ristretto**, **Nord**, **Everforest**, and **Retro 82** are
-stock Omarchy themes with no `zed-theme.json` of their own — Omasnap's
+stock Omarchy themes with no `zed-theme.json` of their own — OmaCodeSnap's
 `readTheme()` synthesizes one from each theme's `colors.toml`
 (`synthesizeZedTheme` in `lib/theme.mjs`; see "Where the colours come from"
 in the README), the same mechanism live on every install, not a
@@ -64,7 +64,7 @@ node docs/gallery/render.mjs
 
 regenerates all eight images (and their fixture JSONs, for inspection) in
 place from the source under `docs/gallery/code/`, through the real,
-unmodified `bin/omasnap --fixture` path for each — the same margin and
+unmodified `bin/omacodesnap --fixture` path for each — the same margin and
 padding floors `app/Snap.qml` applies to any snap, on any Hyprland setup,
 including one (like this machine's) with `gaps_out` at 0. Only the theme
 and wallpaper differ per image, both through the CLI's own `--theme-dir`
