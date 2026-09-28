@@ -1,9 +1,16 @@
-# OmaCodeSnap
+# Developing OmaCodeSnap
+
+The project instructions for people and coding agents. This file is not
+named `CLAUDE.md` on purpose: `omarchy plugin add` copies the whole repository
+into a directory coding agents search for instruction files, and the
+marketplace review treats any such file there as a prompt-injection surface
+(ADR-0013). To have Claude Code load it in a development checkout, create a
+git-ignored `CLAUDE.local.md` at the root containing `@docs/DEVELOPING.md`.
 
 Turn selected code into a beautiful, unmistakably Omarchy image for a social
 post, a doc, or a chat — like codesnap.dev without the macOS traffic lights,
 wearing the live Omarchy theme, and coloured exactly the way the editor it was
-snapped from shows the code. Read `docs/agentile/brief.md` (imported below) and
+snapped from shows the code. Read `docs/agentile/brief.md` (imported at the end) and
 `docs/adr/` before working.
 
 ## Stack
@@ -61,4 +68,4 @@ The backlog lives under one configurable **Agentile directory** (`docs/agentile/
 - Trust but verify: no agent output merges until it passes tests, static analysis, a security skim, and a human read of the diff.
 - Measure flow, not output: if lead time does not drop, the constraint is upstream — fix that, not the agents.
 
-@docs/agentile/brief.md
+@agentile/brief.md

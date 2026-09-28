@@ -3,3 +3,9 @@ node_modules/
 vendor/grammars/lib/
 
 .worktrees/
+
+# Agent instruction files stay out of the installable tree (ADR-0013).
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+.claude/

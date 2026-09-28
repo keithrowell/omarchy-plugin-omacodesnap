@@ -620,6 +620,52 @@ test("CLI: re-highlighting from --request works after the selection and window f
   }
 });
 
+// ADR-0013: the request file is data, never a pointer to code or to other
+// files. Whatever can write it must not be able to choose the directory the
+// re-highlight imports JavaScript and loads grammar libraries from, or make
+// it read a file the request names.
+test("CLI: the request JSON carries no code root, and a re-highlight ignores one planted in it", () => {
+  const dir = scratchDir("omacodesnap-snap-cli-noroot-");
+  try {
+    const selection = join(dir, "selection.txt");
+    writeFileSync(selection, "const a = 1;\n");
+    const window = writeWindow(dir, { class: "dev.zed.Zed", title: "sample.js — sample.js" });
+    const request = join(dir, "request.json");
+    const out = join(dir, "input.json");
+
+    execFileSync(process.execPath, [SNAP_CLI, "--selection", selection, "--window", window, "--request", request, "--out", out, "--theme-dir", GRUVBOX_DIR], {
+      encoding: "utf8",
+    });
+    const recorded = JSON.parse(readFileSync(request, "utf8"));
+    assert.equal(Object.hasOwn(recorded, "root"), false, "the first run must not record a code root");
+
+    writeFileSync(request, JSON.stringify({ ...recorded, root: join(dir, "does-not-exist") }));
+    execFileSync(process.execPath, [SNAP_CLI, "--request", request, "--language", "python", "--out", out, "--theme-dir", GRUVBOX_DIR], { encoding: "utf8" });
+    assert.equal(JSON.parse(readFileSync(out, "utf8")).snap.language, "python");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("CLI: a re-highlight request without inline text/windowInfo is refused, not followed to the paths it names", () => {
+  const dir = scratchDir("omacodesnap-snap-cli-legacy-");
+  try {
+    const secret = join(dir, "secret.txt");
+    writeFileSync(secret, "not for the snap\n");
+    const window = writeWindow(dir, { class: "dev.zed.Zed", title: "sample.js — sample.js" });
+    const request = join(dir, "request.json");
+    const out = join(dir, "input.json");
+    writeFileSync(request, JSON.stringify({ selection: secret, window }));
+
+    const result = spawnSync(process.execPath, [SNAP_CLI, "--request", request, "--language", "python", "--out", out, "--theme-dir", GRUVBOX_DIR], { encoding: "utf8" });
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /inline text\/windowInfo/);
+    assert.ok(!existsSync(out), "nothing rendered from a file the request pointed at");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // Important 3, re-highlight path (post-review fix): the --request
 // re-highlight branch had its own copy of the empty-selection problem —
 // it called prepareSnap and wrote --out unconditionally, with no
@@ -726,7 +772,7 @@ function scratchScriptEnv(prefix) {
   // so HOME needs a real ~/.local/state/omarchy/current/{theme.name,
   // background,theme/} for readTheme() to find, or "prepare" fails outright.
   cpSync(join(ROOT, "tests", "fixtures", "themes", "gruvbox-dark"), join(home, ".local", "state", "omarchy", "current"), { recursive: true });
-  for (const tool of ["bash", "readlink", "dirname", "mkdir", "rm", "date", "cat", "mktemp", "stat", "id"]) {
+  for (const tool of ["bash", "readlink", "dirname", "mkdir", "rm", "rmdir", "head", "date", "cat", "mktemp", "stat", "id"]) {
     const real = join("/usr/bin", tool);
     if (existsSync(real)) symlinkSync(real, join(pathDir, tool));
   }
@@ -875,19 +921,19 @@ test("bin/omacodesnap: an empty selection with a matching provider renders the p
     assert.ok(!existsSync(join(home, "notify-calls.txt")), '"Nothing selected" must not be notified when a provider matches');
     assert.ok(!existsSync(join(home, "qs-invocations.txt")), "qs (the fixture renderer) is never launched by the live path");
 
+    // ADR-0013: the IPC carries nothing but the run directory's random
+    // suffix; the service derives every path (and the code root) itself.
     const shellInvocations = readFileSync(join(home, "omarchy-shell-invocations.txt"), "utf8");
-    assert.match(shellInvocations, /^omacodesnap show /m, "the live path handed off to the OmaCodeSnap shell service");
+    const call = shellInvocations.match(/^omacodesnap show ([A-Za-z0-9]{10})$/m);
+    assert.ok(call, `expected exactly "omacodesnap show <run-id>"; got ${JSON.stringify(shellInvocations)}`);
 
-    // The IPC call's own `$INPUT` argument is a fresh mktemp path (random
-    // suffix); rather than parsing it out of the recorded argv, read
-    // whatever the run left behind under the runtime dir — bin/omacodesnap's
-    // exit trap only removes SELECTION/WINDOW once the handoff succeeds
-    // (REQUEST/INPUT/PREVIEW_PNG are left for the — here, faked — shell
-    // service to clean up), so exactly one input-*.json should remain.
-    const runtimeFiles = readdirSync(join(runtimeDir, "omacodesnap"));
-    const inputFile = runtimeFiles.find((f) => f.startsWith("input-"));
-    assert.ok(inputFile, `expected an input-*.json to remain; found ${JSON.stringify(runtimeFiles)}`);
-    const input = JSON.parse(readFileSync(join(runtimeDir, "omacodesnap", inputFile), "utf8"));
+    // bin/omacodesnap's exit trap only removes SELECTION/WINDOW once the
+    // handoff succeeds; the run directory and its input.json are left for
+    // the (here, faked) shell service to clean up.
+    const runDir = join(runtimeDir, "omacodesnap", `run-${call[1]}`);
+    assert.deepEqual(readdirSync(join(runtimeDir, "omacodesnap")), [`run-${call[1]}`]);
+    assert.ok(!existsSync(join(runDir, "selection.txt")) && !existsSync(join(runDir, "window.json")), "selection and window files are removed at exit");
+    const input = JSON.parse(readFileSync(join(runDir, "input.json"), "utf8"));
     assert.equal(input.snap.filename, "Test Provider");
     assert.equal(input.snap.editor, "other");
     assert.equal(input.detected.editor, "other");

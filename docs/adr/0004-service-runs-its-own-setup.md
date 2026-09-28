@@ -1,7 +1,7 @@
 ---
 number: 0004
 title: Service.qml runs bin/install on load — there is no Omarchy plugin lifecycle hook
-status: accepted
+status: superseded
 date: 2026-09-07
 ---
 
@@ -9,7 +9,8 @@ date: 2026-09-07
 
 ## Status
 
-accepted
+Superseded by ADR-0013 (2026-09-28): loading the plugin now only checks,
+read-only, whether setup has run; `bin/install` is run by the user.
 
 ## Context
 
