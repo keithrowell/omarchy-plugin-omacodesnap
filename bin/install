@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Install Omasnap for Omarchy for the current user.
+# Install OmaCodeSnap for Omarchy for the current user.
 #
 #   bin/install [--dry-run] [--uninstall]
 #
-# Symlinks this checkout into ~/.config/omarchy/plugins/com.keithrowell.omasnap
+# Symlinks this checkout into ~/.config/omarchy/plugins/com.keithrowell.omacodesnap
 # (unless something else is already there, or this checkout already is that
 # directory), writes the desktop file the app launcher reads, links an
-# `omasnap` launcher into ~/.local/bin when that directory exists, checks the
+# `omacodesnap` launcher into ~/.local/bin when that directory exists, checks the
 # required packages from README.md are installed, and prints (never applies)
 # the Hyprland binding and window rule. Idempotent: a second run reports
 # "unchanged". Works from this checkout and from the plugin path itself (a
@@ -29,18 +29,18 @@ for arg in "$@"; do
 done
 
 ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
-LAUNCH="$ROOT/bin/omasnap"
+LAUNCH="$ROOT/bin/omacodesnap"
 # The canonical install location, used for the printed binding whatever
 # directory this runs from (the binding is shared across machines).
-PLUGIN_DIR='~/.config/omarchy/plugins/com.keithrowell.omasnap'
-PLUGIN="$HOME/.config/omarchy/plugins/com.keithrowell.omasnap"
-PLUGIN_ID="com.keithrowell.omasnap"
+PLUGIN_DIR='~/.config/omarchy/plugins/com.keithrowell.omacodesnap'
+PLUGIN="$HOME/.config/omarchy/plugins/com.keithrowell.omacodesnap"
+PLUGIN_ID="com.keithrowell.omacodesnap"
 
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 APP_DIR="$DATA_HOME/applications"
-DESKTOP="$APP_DIR/Omasnap.desktop"
+DESKTOP="$APP_DIR/OmaCodeSnap.desktop"
 BIN_DIR="$HOME/.local/bin"
-LAUNCHER="$BIN_DIR/omasnap"
+LAUNCHER="$BIN_DIR/omacodesnap"
 
 if [[ ! -x "$LAUNCH" ]]; then
   echo "install: $LAUNCH is missing or not executable" >&2
@@ -52,7 +52,7 @@ would() { if (( DRY_RUN )); then say "$1: would $2"; return 0; else return 1; fi
 
 # Uninstall removes only what this checkout owns: a plugin symlink that
 # resolves to ROOT, a desktop file whose Exec points into ROOT, and a
-# launcher symlink that points at ROOT's bin/omasnap. Anything else with
+# launcher symlink that points at ROOT's bin/omacodesnap. Anything else with
 # those names is reported and left alone. A submodule checkout (ROOT is
 # itself PLUGIN) is never removed.
 owns_desktop() {
@@ -126,7 +126,7 @@ desktop_content() {
   cat <<EOF
 [Desktop Entry]
 Version=1.0
-Name=Omasnap
+Name=OmaCodeSnap
 Comment=Turn selected code into a beautiful, unmistakably Omarchy image for a social post, a doc, or a chat.
 Exec="$LAUNCH"
 Terminal=false
@@ -162,7 +162,7 @@ if [[ -d "$BIN_DIR" ]]; then
     say "launcher: linked $LAUNCHER -> $LAUNCH"
   fi
 else
-  say "launcher: skipped ($BIN_DIR does not exist; create it to get an omasnap command)"
+  say "launcher: skipped ($BIN_DIR does not exist; create it to get an omacodesnap command)"
 fi
 
 # Required packages: the single source of truth is the `pacman -S --needed
@@ -211,19 +211,19 @@ fi
 # Hyprland config is Lua; the canonical plugin path is used here (not ROOT)
 # since this snippet is meant to be pasted once and shared across machines.
 if command -v uwsm-app >/dev/null 2>&1; then
-  action="uwsm-app -- $PLUGIN_DIR/bin/omasnap"
+  action="uwsm-app -- $PLUGIN_DIR/bin/omacodesnap"
   uwsm_note=""
 else
-  action="$PLUGIN_DIR/bin/omasnap"
-  uwsm_note=" (uwsm-app is not on PATH, so the binding launches Omasnap directly)"
+  action="$PLUGIN_DIR/bin/omacodesnap"
+  uwsm_note=" (uwsm-app is not on PATH, so the binding launches OmaCodeSnap directly)"
 fi
 
 say ""
 say "Add these to ~/.config/hypr/bindings.lua (not applied)$uwsm_note"
 say ""
-say "-- Omasnap: snap the selected code into an Omarchy-styled image."
-say "o.bind(\"SUPER + ALT + SHIFT + S\", \"Omasnap\", \"$action\")"
-say "o.window({ title = \"^(Omasnap)\$\" }, { float = true, center = true })"
+say "-- OmaCodeSnap: snap the selected code into an Omarchy-styled image."
+say "o.bind(\"SUPER + ALT + SHIFT + S\", \"OmaCodeSnap\", \"$action\")"
+say "o.window({ title = \"^(OmaCodeSnap)\$\" }, { float = true, center = true })"
 
 # The plugin (ADR-0003) must also be enabled in the Omarchy shell — the
 # binding above talks to it over IPC, and does nothing until then. Printed,

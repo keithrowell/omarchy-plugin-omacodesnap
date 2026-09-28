@@ -10,5 +10,5 @@
    the change immediately (it is a symlink into `~/.config/omarchy/plugins/`,
    so this is cheap and reversible).
 3. Delete the branch and remove the worktree.
-4. Trunk must launch after every ship. If `bin/omasnap` no longer starts,
+4. Trunk must launch after every ship. If `bin/omacodesnap` no longer starts,
    revert the merge on `master` and halt the loop with the reason.

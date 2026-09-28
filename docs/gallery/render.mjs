@@ -1,6 +1,6 @@
 // Regenerates every gallery image (and, with --hero, the README hero) from
 // the source snippets under `docs/gallery/code/`, through the real,
-// unmodified `bin/omasnap --fixture` path — no gallery-only rendering
+// unmodified `bin/omacodesnap --fixture` path — no gallery-only rendering
 // logic, only gallery-only *inputs* (the code, and for four languages with
 // no Zed grammar, hand-tokenized spans via `./hand-tokenize.mjs`; see
 // `SOURCES.md`'s "How the last four are coloured").
@@ -46,7 +46,7 @@ const osakaJadeDir = (() => {
     const stockDir = join(STOCK, "osaka-jade");
     const personalZed = join(HOME, ".config/omarchy/themes/osaka-jade/zed-theme.json");
     if (!existsSync(personalZed)) return stockDir; // falls back to the synthesized theme
-    const merged = join(tmpdir(), "omasnap-gallery-osaka-jade-merged");
+    const merged = join(tmpdir(), "omacodesnap-gallery-osaka-jade-merged");
     rmSync(merged, { recursive: true, force: true });
     cpSync(stockDir, merged, { recursive: true });
     cpSync(personalZed, join(merged, "zed-theme.json"));
@@ -88,7 +88,7 @@ function writeFixtureAndRender(name, fixture, themeKey) {
     const themeDir = THEME_DIRS[themeKey];
     const wallpaper = wallpaperFor(themeKey);
     console.error("rendering", name, "...");
-    execFileSync("bin/omasnap", ["--fixture", fixturePath, "--out", outPath, "--theme-dir", themeDir, "--wallpaper", wallpaper], {
+    execFileSync("bin/omacodesnap", ["--fixture", fixturePath, "--out", outPath, "--theme-dir", themeDir, "--wallpaper", wallpaper], {
         cwd: ROOT,
         stdio: "inherit",
     });

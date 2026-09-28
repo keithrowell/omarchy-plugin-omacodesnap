@@ -29,7 +29,7 @@ test("neovim.highlight: unreachable in the real pipeline, always null", async ()
 // pid plays the role of the "terminal" neovim.detect walks) ----------------
 
 test("live: neovim.detect finds a real Neovim, then resolveSelection reports the live visual selection with real colours", { skip: !HAS_NVIM }, async () => {
-  const dir = mkdtempSync(join(tmpdir(), "omasnap-nvim-adapter-"));
+  const dir = mkdtempSync(join(tmpdir(), "omacodesnap-nvim-adapter-"));
   const file = join(dir, "sample.js");
   writeFileSync(file, "const x = 1;\n");
 

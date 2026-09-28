@@ -1,6 +1,6 @@
-# Contributing to Omasnap
+# Contributing to OmaCodeSnap
 
-Thanks for considering a contribution. Omasnap is a small, opinionated
+Thanks for considering a contribution. OmaCodeSnap is a small, opinionated
 Omarchy plugin — please open an issue before starting anything non-trivial
 (a new editor, a new language, a behaviour change) so we can agree on the
 approach before you invest time in it. Small fixes and clear bugs can go
@@ -8,7 +8,7 @@ straight to a pull request.
 
 ## Before you start
 
-Omasnap only runs on [Omarchy](https://omarchy.org) (Arch Linux + Hyprland +
+OmaCodeSnap only runs on [Omarchy](https://omarchy.org) (Arch Linux + Hyprland +
 quickshell). You'll need a real Omarchy machine, or something close enough
 to it, to develop and test against — this isn't something you can build or
 run on macOS/Windows/generic Linux.
@@ -22,7 +22,7 @@ sudo pacman -S --needed quickshell wl-clipboard qt6-5compat tree-sitter-cli gcc 
 ## Development loop
 
 ```bash
-bin/omasnap                        # run from the checkout: snap the current selection and preview it
+bin/omacodesnap                        # run from the checkout: snap the current selection and preview it
 node --test tests/*.test.mjs       # every test in the project
 bin/build-grammars                 # compile vendored grammars (first run only; node --test does this too)
 ```
@@ -30,14 +30,14 @@ bin/build-grammars                 # compile vendored grammars (first run only; 
 A few more tools:
 
 ```bash
-bin/omasnap --benchmark            # time the non-window steps of a live snap (no window opens)
-bin/omasnap --fixture F --out P    # render a fixture JSON (tests/fixtures/render/*.json) to a PNG, headless
+bin/omacodesnap --benchmark            # time the non-window steps of a live snap (no window opens)
+bin/omacodesnap --fixture F --out P    # render a fixture JSON (tests/fixtures/render/*.json) to a PNG, headless
 bin/build-grammars --check         # report missing/stale grammars without building
 ```
 
 `--fixture` renders the same frame the live window uses, against the
 current theme by default; `--theme-dir` and `--wallpaper` pick another.
-`OMASNAP_AUTO=copy|save|shot|none bin/omasnap` drives the live preview
+`OMACODESNAP_AUTO=copy|save|shot|none bin/omacodesnap` drives the live preview
 unattended, for testing Copy/Save without a human.
 
 **After changing anything under `app/`, run `omarchy-restart-shell`.** The
@@ -48,7 +48,7 @@ makes a real fix look unfixed. `--fixture` always runs fresh QML.
 
 Developing from a checkout elsewhere: clone it, run `bin/install` once to
 symlink it into `~/.config/omarchy/plugins/`, then `omarchy plugin enable
-com.keithrowell.omasnap`. `bin/install --dry-run` shows what it would do,
+com.keithrowell.omacodesnap`. `bin/install --dry-run` shows what it would do,
 `--uninstall` reverses it.
 
 `docs/agentile/` and `docs/adr/` carry the backlog and the decision records

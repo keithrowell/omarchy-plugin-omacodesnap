@@ -11,7 +11,7 @@ import { readTheme } from "../lib/theme.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SNAP_CLI = join(ROOT, "lib", "snap.mjs");
-const OMASNAP = join(ROOT, "bin", "omasnap");
+const OMACODESNAP = join(ROOT, "bin", "omacodesnap");
 const GRUVBOX_DIR = join(ROOT, "tests", "fixtures", "themes", "gruvbox-dark", "theme");
 const GRUVBOX = readTheme(GRUVBOX_DIR);
 
@@ -54,11 +54,11 @@ test("filenameFromTitle(zed): a dirty-buffer marker is stripped, project-open, p
 });
 
 test("filenameFromTitle(vscode): marker, filename, folder, app name", () => {
-  assert.equal(filenameFromTitle("● index.ts - omasnap - Visual Studio Code", "vscode"), "index.ts");
+  assert.equal(filenameFromTitle("● index.ts - omacodesnap - Visual Studio Code", "vscode"), "index.ts");
 });
 
 test("filenameFromTitle(vscode): a hyphenated filename is kept whole, not truncated at its own hyphen", () => {
-  assert.equal(filenameFromTitle("omasnap-demo.js - sakusei - Visual Studio Code", "vscode"), "omasnap-demo.js");
+  assert.equal(filenameFromTitle("omacodesnap-demo.js - sakusei - Visual Studio Code", "vscode"), "omacodesnap-demo.js");
   assert.equal(filenameFromTitle("my-component.tsx - project - Visual Studio Code", "vscode"), "my-component.tsx");
 });
 
@@ -458,7 +458,7 @@ before(() => {
 });
 
 test("CLI: produces an input JSON whose .snap passes validateFixture, plus languages/detected/warnings; the request JSON records pictures", () => {
-  const dir = scratchDir("omasnap-snap-cli-");
+  const dir = scratchDir("omacodesnap-snap-cli-");
   try {
     const selection = join(dir, "selection.txt");
     writeFileSync(selection, "const a = 1;\n");
@@ -487,7 +487,7 @@ test("CLI: produces an input JSON whose .snap passes validateFixture, plus langu
 });
 
 test("CLI: a project-open Zed title (<project> — <file>) detects the language from the file half, not the project half", () => {
-  const dir = scratchDir("omasnap-snap-cli-project-");
+  const dir = scratchDir("omacodesnap-snap-cli-project-");
   try {
     const selection = join(dir, "selection.txt");
     writeFileSync(selection, "const a = 1;\n");
@@ -509,7 +509,7 @@ test("CLI: a project-open Zed title (<project> — <file>) detects the language 
 });
 
 test("CLI: an empty (whitespace-only) selection exits 3", () => {
-  const dir = scratchDir("omasnap-snap-cli-empty-");
+  const dir = scratchDir("omacodesnap-snap-cli-empty-");
   try {
     const selection = join(dir, "selection.txt");
     writeFileSync(selection, "   \n\n");
@@ -537,15 +537,15 @@ test("CLI: an empty (whitespace-only) selection exits 3", () => {
 // selection fall through to a blank/failed render — it must still exit 3,
 // exactly as an unmatched empty selection always has.
 test("CLI: an empty selection with a matching-but-failing provider still exits 3, not a blank render", () => {
-  const dir = scratchDir("omasnap-snap-cli-provider-fail-");
-  const home = scratchDir("omasnap-snap-cli-provider-fail-home-");
+  const dir = scratchDir("omacodesnap-snap-cli-provider-fail-");
+  const home = scratchDir("omacodesnap-snap-cli-provider-fail-home-");
   try {
     const windowClass = "com.keithrowell.testprovider";
     const pluginDir = join(home, ".config", "omarchy", "plugins", windowClass);
     mkdirSync(pluginDir, { recursive: true });
     writeFileSync(
       join(pluginDir, "manifest.json"),
-      JSON.stringify({ schemaVersion: 1, id: windowClass, name: "Test Provider", version: "1.0.0", omasnap: { provider: "snap.sh" } }),
+      JSON.stringify({ schemaVersion: 1, id: windowClass, name: "Test Provider", version: "1.0.0", omacodesnap: { provider: "snap.sh" } }),
     );
     writeFileSync(join(pluginDir, "snap.sh"), "#!/usr/bin/env bash\nexit 1\n", { mode: 0o755 });
 
@@ -573,7 +573,7 @@ test("CLI: an empty selection with a matching-but-failing provider still exits 3
 });
 
 test("CLI: re-highlighting from --request with --language changes snap.language", () => {
-  const dir = scratchDir("omasnap-snap-cli-rehl-");
+  const dir = scratchDir("omacodesnap-snap-cli-rehl-");
   try {
     const selection = join(dir, "selection.txt");
     writeFileSync(selection, "const a = 1;\n");
@@ -595,8 +595,8 @@ test("CLI: re-highlighting from --request with --language changes snap.language"
   }
 });
 
-test("CLI: re-highlighting from --request works after the selection and window files are gone (bin/omasnap's trap deletes them at exit)", () => {
-  const dir = scratchDir("omasnap-snap-cli-rehl-gone-");
+test("CLI: re-highlighting from --request works after the selection and window files are gone (bin/omacodesnap's trap deletes them at exit)", () => {
+  const dir = scratchDir("omacodesnap-snap-cli-rehl-gone-");
   try {
     const selection = join(dir, "selection.txt");
     writeFileSync(selection, "const a = 1;\n");
@@ -630,15 +630,15 @@ test("CLI: re-highlighting from --request works after the selection and window f
 // preview's language selector, the old code would silently overwrite a
 // real rendered snap with a blank `{"filename":"python",...}` card.
 test("CLI: re-highlighting from --request with an empty original selection and a now-failing provider exits 3, never overwriting --out with a blank render", () => {
-  const dir = scratchDir("omasnap-snap-cli-rehl-provider-fail-");
-  const home = scratchDir("omasnap-snap-cli-rehl-provider-fail-home-");
+  const dir = scratchDir("omacodesnap-snap-cli-rehl-provider-fail-");
+  const home = scratchDir("omacodesnap-snap-cli-rehl-provider-fail-home-");
   try {
     const windowClass = "com.keithrowell.testprovider";
     const pluginDir = join(home, ".config", "omarchy", "plugins", windowClass);
     mkdirSync(pluginDir, { recursive: true });
     writeFileSync(
       join(pluginDir, "manifest.json"),
-      JSON.stringify({ schemaVersion: 1, id: windowClass, name: "Test Provider", version: "1.0.0", omasnap: { provider: "snap.sh" } }),
+      JSON.stringify({ schemaVersion: 1, id: windowClass, name: "Test Provider", version: "1.0.0", omacodesnap: { provider: "snap.sh" } }),
     );
     const scriptPath = join(pluginDir, "snap.sh");
     // First: a provider that succeeds, so the first run's request.json
@@ -687,7 +687,7 @@ test("CLI: re-highlighting from --request with an empty original selection and a
 });
 
 test('CLI: re-highlighting with --language plain forces no language (the preview\'s "plain" entry)', () => {
-  const dir = scratchDir("omasnap-snap-cli-plain-");
+  const dir = scratchDir("omacodesnap-snap-cli-plain-");
   try {
     const selection = join(dir, "selection.txt");
     writeFileSync(selection, "const a = 1;\n");
@@ -706,10 +706,10 @@ test('CLI: re-highlighting with --language plain forces no language (the preview
   }
 });
 
-// --- bin/omasnap (script level, live/benchmark path) ------------------------
+// --- bin/omacodesnap (script level, live/benchmark path) ------------------------
 
 // A scratch HOME/XDG_RUNTIME_DIR and a PATH built only from the coreutils
-// bin/omasnap actually shells out to, plus fakes for wl-paste/hyprctl/
+// bin/omacodesnap actually shells out to, plus fakes for wl-paste/hyprctl/
 // notify-send/qs (and a real `node`, symlinked under the plain name the
 // script invokes it by) — so these tests never depend on, or affect, the
 // real desktop, clipboard, or Pictures folder. Pattern matches
@@ -722,7 +722,7 @@ function scratchScriptEnv(prefix) {
   const pathDir = join(home, "path");
   mkdirSync(pathDir, { recursive: true });
   // lib/snap.mjs's CLI always reads the *live* theme (no --theme-dir in the
-  // live/benchmark path) — bin/omasnap gives it no way to point elsewhere —
+  // live/benchmark path) — bin/omacodesnap gives it no way to point elsewhere —
   // so HOME needs a real ~/.local/state/omarchy/current/{theme.name,
   // background,theme/} for readTheme() to find, or "prepare" fails outright.
   cpSync(join(ROOT, "tests", "fixtures", "themes", "gruvbox-dark"), join(home, ".local", "state", "omarchy", "current"), { recursive: true });
@@ -740,21 +740,21 @@ function writeFakeTool(pathDir, name, body) {
 
 // A `qs` that records that it ran (and its args) instead of ever actually
 // starting Quickshell — every script-level test below asserts this file was
-// never created, i.e. bin/omasnap never got as far as launching a window.
+// never created, i.e. bin/omacodesnap never got as far as launching a window.
 function writeQsSpy(pathDir, home) {
   writeFakeTool(pathDir, "qs", `echo "$@" >> "${join(home, "qs-invocations.txt")}"\nexit 0`);
 }
 
-function runOmasnap(args, { pathDir, home, runtimeDir }) {
-  return spawnSync(OMASNAP, args, {
+function runOmaCodeSnap(args, { pathDir, home, runtimeDir }) {
+  return spawnSync(OMACODESNAP, args, {
     encoding: "utf8",
     cwd: home,
     env: { HOME: home, XDG_RUNTIME_DIR: runtimeDir, PATH: pathDir },
   });
 }
 
-test("bin/omasnap --benchmark: times a 60-line selection, prints the four timing lines, leaves no runtime files or Pictures writes, and never launches qs", () => {
-  const { home, runtimeDir, pictures, pathDir } = scratchScriptEnv("omasnap-bin-benchmark-");
+test("bin/omacodesnap --benchmark: times a 60-line selection, prints the four timing lines, leaves no runtime files or Pictures writes, and never launches qs", () => {
+  const { home, runtimeDir, pictures, pathDir } = scratchScriptEnv("omacodesnap-bin-benchmark-");
   try {
     const lines = ["function fib(n) {"];
     for (let i = 0; i < 58; i++) lines.push(`  const x${i} = ${i} * 2 + 1;`);
@@ -768,7 +768,7 @@ test("bin/omasnap --benchmark: times a 60-line selection, prints the four timing
     writeFakeTool(pathDir, "xdg-user-dir", `echo "${pictures}"`);
     writeQsSpy(pathDir, home);
 
-    const result = runOmasnap(["--benchmark"], { pathDir, home, runtimeDir });
+    const result = runOmaCodeSnap(["--benchmark"], { pathDir, home, runtimeDir });
 
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /^selection: \d+ ms$/m);
@@ -776,7 +776,7 @@ test("bin/omasnap --benchmark: times a 60-line selection, prints the four timing
     assert.match(result.stdout, /^prepare: \d+ ms$/m);
     assert.match(result.stdout, /^total: \d+ ms$/m);
 
-    const runtimeContents = existsSync(join(runtimeDir, "omasnap")) ? readdirSync(join(runtimeDir, "omasnap")) : [];
+    const runtimeContents = existsSync(join(runtimeDir, "omacodesnap")) ? readdirSync(join(runtimeDir, "omacodesnap")) : [];
     assert.deepEqual(runtimeContents, [], "no files left in the runtime dir");
     assert.ok(!existsSync(pictures), "nothing written under Pictures");
     assert.ok(!existsSync(join(home, "qs-invocations.txt")), "qs must never be launched by --benchmark");
@@ -789,13 +789,13 @@ test("bin/omasnap --benchmark: times a 60-line selection, prints the four timing
 // focused window's class — the overwhelming common case, and every case
 // before this spec existed — an empty selection must still bail exactly as
 // before: bash hands off to `node lib/snap.mjs` unconditionally now (see
-// bin/omasnap), but that CLI's own provider-aware check finds nothing
+// bin/omacodesnap), but that CLI's own provider-aware check finds nothing
 // registered under this scratch HOME's (nonexistent)
 // ~/.config/omarchy/plugins, so it still exits 3 and this script still
 // notifies "Nothing selected" and exits 0 without ever reaching the
 // omarchy-shell IPC call.
-test("bin/omasnap: an empty selection notifies \"Nothing selected\" and exits 0 without ever launching qs, when no provider matches", () => {
-  const { home, runtimeDir, pictures, pathDir } = scratchScriptEnv("omasnap-bin-empty-");
+test("bin/omacodesnap: an empty selection notifies \"Nothing selected\" and exits 0 without ever launching qs, when no provider matches", () => {
+  const { home, runtimeDir, pictures, pathDir } = scratchScriptEnv("omacodesnap-bin-empty-");
   try {
     writeFakeTool(pathDir, "wl-paste", "exit 1"); // both --primary and the clipboard fallback come up empty
     writeFakeTool(pathDir, "hyprctl", "exit 1");
@@ -803,11 +803,11 @@ test("bin/omasnap: an empty selection notifies \"Nothing selected\" and exits 0 
     writeFakeTool(pathDir, "notify-send", `printf '%s\\n' "$@" >> "${join(home, "notify-calls.txt")}"`);
     writeQsSpy(pathDir, home);
 
-    const result = runOmasnap([], { pathDir, home, runtimeDir });
+    const result = runOmaCodeSnap([], { pathDir, home, runtimeDir });
 
     assert.equal(result.status, 0, result.stderr);
     const notifyCalls = readFileSync(join(home, "notify-calls.txt"), "utf8");
-    assert.match(notifyCalls, /^Omasnap$/m);
+    assert.match(notifyCalls, /^OmaCodeSnap$/m);
     assert.match(notifyCalls, /^Nothing selected$/m);
     assert.ok(!existsSync(join(home, "qs-invocations.txt")), "qs must never be launched for an empty selection");
   } finally {
@@ -839,15 +839,15 @@ function writeOmarchyShellSpy(pathDir, home) {
 function installFakeProvider(home, { id, fixture, scriptBody }) {
   const pluginDir = join(home, ".config", "omarchy", "plugins", id);
   mkdirSync(join(pluginDir, "bin"), { recursive: true });
-  writeFileSync(join(pluginDir, "manifest.json"), JSON.stringify({ schemaVersion: 1, id, name: id, version: "1.0.0", omasnap: { provider: "bin/provider-snap" } }));
+  writeFileSync(join(pluginDir, "manifest.json"), JSON.stringify({ schemaVersion: 1, id, name: id, version: "1.0.0", omacodesnap: { provider: "bin/provider-snap" } }));
   const script = join(pluginDir, "bin", "provider-snap");
   const body = scriptBody ?? `#!/usr/bin/env node\nconsole.log(JSON.stringify(${JSON.stringify(fixture)}));\n`;
   writeFileSync(script, body, { mode: 0o755 });
   return pluginDir;
 }
 
-test("bin/omasnap: an empty selection with a matching provider renders the provider's fixture instead of bailing with \"Nothing selected\"", () => {
-  const { home, runtimeDir, pictures, pathDir } = scratchScriptEnv("omasnap-bin-provider-");
+test("bin/omacodesnap: an empty selection with a matching provider renders the provider's fixture instead of bailing with \"Nothing selected\"", () => {
+  const { home, runtimeDir, pictures, pathDir } = scratchScriptEnv("omacodesnap-bin-provider-");
   try {
     const windowClass = "com.keithrowell.testprovider";
     const fixture = {
@@ -869,25 +869,25 @@ test("bin/omasnap: an empty selection with a matching provider renders the provi
     writeQsSpy(pathDir, home);
     writeOmarchyShellSpy(pathDir, home);
 
-    const result = runOmasnap([], { pathDir, home, runtimeDir });
+    const result = runOmaCodeSnap([], { pathDir, home, runtimeDir });
 
     assert.equal(result.status, 0, result.stderr);
     assert.ok(!existsSync(join(home, "notify-calls.txt")), '"Nothing selected" must not be notified when a provider matches');
     assert.ok(!existsSync(join(home, "qs-invocations.txt")), "qs (the fixture renderer) is never launched by the live path");
 
     const shellInvocations = readFileSync(join(home, "omarchy-shell-invocations.txt"), "utf8");
-    assert.match(shellInvocations, /^omasnap show /m, "the live path handed off to the Omasnap shell service");
+    assert.match(shellInvocations, /^omacodesnap show /m, "the live path handed off to the OmaCodeSnap shell service");
 
     // The IPC call's own `$INPUT` argument is a fresh mktemp path (random
     // suffix); rather than parsing it out of the recorded argv, read
-    // whatever the run left behind under the runtime dir — bin/omasnap's
+    // whatever the run left behind under the runtime dir — bin/omacodesnap's
     // exit trap only removes SELECTION/WINDOW once the handoff succeeds
     // (REQUEST/INPUT/PREVIEW_PNG are left for the — here, faked — shell
     // service to clean up), so exactly one input-*.json should remain.
-    const runtimeFiles = readdirSync(join(runtimeDir, "omasnap"));
+    const runtimeFiles = readdirSync(join(runtimeDir, "omacodesnap"));
     const inputFile = runtimeFiles.find((f) => f.startsWith("input-"));
     assert.ok(inputFile, `expected an input-*.json to remain; found ${JSON.stringify(runtimeFiles)}`);
-    const input = JSON.parse(readFileSync(join(runtimeDir, "omasnap", inputFile), "utf8"));
+    const input = JSON.parse(readFileSync(join(runtimeDir, "omacodesnap", inputFile), "utf8"));
     assert.equal(input.snap.filename, "Test Provider");
     assert.equal(input.snap.editor, "other");
     assert.equal(input.detected.editor, "other");
@@ -901,8 +901,8 @@ test("bin/omasnap: an empty selection with a matching provider renders the provi
 // blank/failed render reaching the shell service — it must still notify
 // "Nothing selected" and never hand off to omarchy-shell at all, exactly
 // as the no-provider-at-all case does.
-test("bin/omasnap: an empty selection with a matching but failing provider still notifies \"Nothing selected\", never hands off to the shell service", () => {
-  const { home, runtimeDir, pictures, pathDir } = scratchScriptEnv("omasnap-bin-provider-fail-");
+test("bin/omacodesnap: an empty selection with a matching but failing provider still notifies \"Nothing selected\", never hands off to the shell service", () => {
+  const { home, runtimeDir, pictures, pathDir } = scratchScriptEnv("omacodesnap-bin-provider-fail-");
   try {
     const windowClass = "com.keithrowell.testproviderfail";
     installFakeProvider(home, { id: windowClass, scriptBody: "#!/usr/bin/env bash\nexit 1\n" });
@@ -914,7 +914,7 @@ test("bin/omasnap: an empty selection with a matching but failing provider still
     writeQsSpy(pathDir, home);
     writeOmarchyShellSpy(pathDir, home);
 
-    const result = runOmasnap([], { pathDir, home, runtimeDir });
+    const result = runOmaCodeSnap([], { pathDir, home, runtimeDir });
 
     assert.equal(result.status, 0, result.stderr);
     const notifyCalls = readFileSync(join(home, "notify-calls.txt"), "utf8");

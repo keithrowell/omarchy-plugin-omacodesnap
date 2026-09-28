@@ -8,9 +8,9 @@ import "Grab.js" as Grab
 // The live preview window (ADR-0003). Reusable, host-agnostic component:
 // every input arrives as a constructor property, never read from the
 // environment — `app/Service.qml` creates one of these per snap (the
-// persistent, marketplace-required path), passing the paths bin/omasnap's
+// persistent, marketplace-required path), passing the paths bin/omacodesnap's
 // selection/highlight pipeline already wrote; `app/Main.qml`'s own
-// `OMASNAP_MODE=preview` entry point creates one too, for standalone
+// `OMACODESNAP_MODE=preview` entry point creates one too, for standalone
 // testing without the Omarchy shell, filling the same properties from
 // `Quickshell.env(...)` itself.
 //
@@ -31,7 +31,7 @@ import "Grab.js" as Grab
 // plain `Rectangle` + `Text` + `MouseArea`.
 FloatingWindow {
     id: previewWindow
-    title: "Omasnap"
+    title: "OmaCodeSnap"
 
     signal overlayClosed()
 
@@ -63,7 +63,7 @@ FloatingWindow {
     readonly property int popupMaxVisible: 8
     readonly property int popupWidth: 180
     readonly property int popupBorderWidth: 1
-    // How long after Snap.ready to wait before an OMASNAP_AUTO action runs
+    // How long after Snap.ready to wait before an OMACODESNAP_AUTO action runs
     // or a Copy/Save grab fires, so the last frame (blur, SVG decode) has
     // settled — same reasoning as Main.qml's render mode.
     readonly property int settleDelayMs: 250
@@ -77,13 +77,13 @@ FloatingWindow {
     property string autoMode: ""
     // Empty means "use the default path"; see `shotPath` below.
     property string shotPathOverride: ""
-    // OMASNAP_AUTO="lang:<id>" (e.g. "lang:python", "lang:plain") drives the
+    // OMACODESNAP_AUTO="lang:<id>" (e.g. "lang:python", "lang:plain") drives the
     // language selector through the exact same code path a popup click
     // uses (selectLanguage), waits for the re-highlight to land, then takes
     // a shot-style picture and quits — so the popup's own re-highlight flow
     // is verifiable without a human click, the same way copy/save/shot are.
     readonly property string autoLangId: autoMode.indexOf("lang:") === 0 ? autoMode.slice("lang:".length) : ""
-    // Where OMASNAP_AUTO=shot|lang:<id> saves a picture of this bar for
+    // Where OMACODESNAP_AUTO=shot|lang:<id> saves a picture of this bar for
     // review; overridable so a reviewer/builder can point it anywhere.
     readonly property string shotPath: shotPathOverride !== "" ? shotPathOverride : (rootDir + "/docs/agentile/specs/0006-preview-and-capture/preview-shot.png")
 
@@ -146,7 +146,7 @@ FloatingWindow {
             } catch (e) {
                 console.error("preview: invalid input JSON at " + previewWindow.inputPath + ": " + e);
             }
-            // Only once an OMASNAP_AUTO=lang:<id> run's own re-highlight
+            // Only once an OMACODESNAP_AUTO=lang:<id> run's own re-highlight
             // reload lands (autoStarted guards out this same handler firing
             // on the very first, ordinary load at startup) — give the frame
             // a moment to rebuild from the new input before grabbing it.
@@ -181,7 +181,7 @@ FloatingWindow {
             if (exitCode === 0) {
                 inputFile.reload();
             } else {
-                previewWindow.notify("Omasnap", "Re-highlight failed (see terminal)");
+                previewWindow.notify("OmaCodeSnap", "Re-highlight failed (see terminal)");
             }
         }
     }
@@ -193,9 +193,9 @@ FloatingWindow {
         stdinEnabled: false
         onExited: (exitCode, exitStatus) => {
             if (exitCode === 0) {
-                previewWindow.notify("Omasnap", "Copied to clipboard");
+                previewWindow.notify("OmaCodeSnap", "Copied to clipboard");
             } else {
-                previewWindow.notify("Omasnap", "Copy failed: install wl-clipboard (sudo pacman -S wl-clipboard)");
+                previewWindow.notify("OmaCodeSnap", "Copy failed: install wl-clipboard (sudo pacman -S wl-clipboard)");
             }
         }
     }
@@ -212,10 +212,10 @@ FloatingWindow {
     }
 
     // Closes once the auto-triggered action's own notification has finished,
-    // so `OMASNAP_AUTO=copy|save` is verifiable end to end (notification
+    // so `OMACODESNAP_AUTO=copy|save` is verifiable end to end (notification
     // text included) without a human, then closes — never left open.
     function finishAutoIfDue() {
-        // Also covers a failed OMASNAP_AUTO=lang:<id> re-highlight (its
+        // Also covers a failed OMACODESNAP_AUTO=lang:<id> re-highlight (its
         // "Re-highlight failed" notification runs through here too, via
         // languageProcess.onExited) — the window must not sit open forever
         // just because the CLI call failed.
@@ -246,10 +246,10 @@ FloatingWindow {
         const size = Grab.exportSize(snapItem, snapItem.exportScale, previewWindow.screenScale);
         snapItem.grabToImage(function (result) {
             if (!result.saveToFile(previewWindow.previewPngPath)) {
-                previewWindow.notify("Omasnap", "Copy failed: could not render the image");
+                previewWindow.notify("OmaCodeSnap", "Copy failed: could not render the image");
                 return;
             }
-            copyProcess.command = ["sh", "-c", 'exec wl-copy --type image/png < "$1"', "omasnap", previewWindow.previewPngPath];
+            copyProcess.command = ["sh", "-c", 'exec wl-copy --type image/png < "$1"', "omacodesnap", previewWindow.previewPngPath];
             copyProcess.running = true;
         }, Qt.size(size.width, size.height));
     }
@@ -257,12 +257,12 @@ FloatingWindow {
     function doSave() {
         const size = Grab.exportSize(snapItem, snapItem.exportScale, previewWindow.screenScale);
         const dir = previewWindow.picturesDir !== "" ? previewWindow.picturesDir : (Quickshell.env("HOME") + "/Pictures");
-        const path = dir + "/omasnap-" + Qt.formatDateTime(new Date(), "yyyy-MM-dd_HH-mm-ss") + ".png";
+        const path = dir + "/omacodesnap-" + Qt.formatDateTime(new Date(), "yyyy-MM-dd_HH-mm-ss") + ".png";
         snapItem.grabToImage(function (result) {
             if (result.saveToFile(path)) {
-                previewWindow.notify("Omasnap", "Saved " + path);
+                previewWindow.notify("OmaCodeSnap", "Saved " + path);
             } else {
-                previewWindow.notify("Omasnap", "Save failed");
+                previewWindow.notify("OmaCodeSnap", "Save failed");
             }
         }, Qt.size(size.width, size.height));
     }
@@ -298,7 +298,7 @@ FloatingWindow {
         onTriggered: previewWindow.runAuto()
     }
 
-    // Fires once `inputFile`'s onLoaded sees the OMASNAP_AUTO=lang:<id>
+    // Fires once `inputFile`'s onLoaded sees the OMACODESNAP_AUTO=lang:<id>
     // re-highlight's own reload land (see there); doShot() saves and closes.
     Timer {
         id: autoLangShotTimer
@@ -314,7 +314,7 @@ FloatingWindow {
         // The window's own `color` fills the real window surface, but a
         // grabToImage() of an *Item* (rather than the window) renders an
         // offscreen texture that starts transparent regardless — without an
-        // explicit opaque backing rectangle here, OMASNAP_AUTO=shot's
+        // explicit opaque backing rectangle here, OMACODESNAP_AUTO=shot's
         // grab of `contentRoot` showed the gap between the frame and the
         // bar as flattened white instead of the theme's background.
         Rectangle {

@@ -18,7 +18,7 @@
   shiki live in the repo (or are pacman packages). No `npm install` at runtime,
   no network at runtime.
 - **Run the gates yourself** before reporting done: `node --test tests/*.test.mjs`.
-  If the change touches rendering, launch `bin/omasnap` against a fixture
+  If the change touches rendering, launch `bin/omacodesnap` against a fixture
   (`tests/fixtures/`) and save the PNG beside the spec so the reviewer can see it.
 - **Commit granularity.** Small commits with the spec slug in the message; the
   ship step merges the branch as one unit.

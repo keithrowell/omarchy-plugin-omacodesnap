@@ -1,11 +1,11 @@
-# Project Brief — Omasnap
+# Project Brief — OmaCodeSnap
 
 The living context the loop steers by. `/ag-shape`, `/ag-spec`, `/ag-prioritise`,
 and the `ag-planner` read this; Business Value in triage is scored against the
 **prioritised outcomes** below. Keep it short (it loads into context) and update
 it as the project learns — `/ag-retro` treats it as an update target.
 
-Omasnap turns selected code into a beautiful, unmistakably Omarchy image for a
+OmaCodeSnap turns selected code into a beautiful, unmistakably Omarchy image for a
 social post, a doc, or a chat. Think codesnap.dev, minus the macOS traffic
 lights, wearing the live Omarchy theme — and coloured exactly the way the
 editor it was snapped from shows the code.
@@ -35,7 +35,7 @@ clipboard and on disk that looks like Zed under the current Omarchy theme.
 
 ## Constraints
 
-- **Input is editor-agnostic.** A Hyprland keybinding runs Omasnap; it reads the
+- **Input is editor-agnostic.** A Hyprland keybinding runs OmaCodeSnap; it reads the
   Wayland *primary selection* (`wl-paste --primary`), falling back to the
   clipboard when nothing is selected. `hyprctl activewindow` identifies the
   focused editor (class + title); the filename in the title drives language
@@ -55,12 +55,12 @@ clipboard and on disk that looks like Zed under the current Omarchy theme.
   already shipped by Omarchy (quickshell, wl-clipboard, node). No global npm
   installs at runtime; vendored JS is fine.
 - **Fast.** Binding to preview window in about a second.
-- **Distributed as an Omarchy plugin** (`manifest.json`, `bin/omasnap`,
+- **Distributed as an Omarchy plugin** (`manifest.json`, `bin/omacodesnap`,
   `bin/install`), registered as a submodule in the dotfiles.
 
 ## Non-goals
 
-- No editor plugins or extensions — Omasnap never asks Zed or VS Code to do anything.
+- No editor plugins or extensions — OmaCodeSnap never asks Zed or VS Code to do anything.
 - No non-Omarchy styling: no theme picker, no macOS/Windows chrome, no arbitrary colour schemes.
 - No direct posting to social networks; it produces an image, sharing is yours.
 - No editing or annotation UI: no arrows, highlights, or captions on the image.

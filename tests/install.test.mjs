@@ -14,10 +14,10 @@ import { fileURLToPath } from "node:url";
 // is added to it only for the tests that need one.
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const INSTALL = join(ROOT, "bin", "install");
-const LAUNCH = join(ROOT, "bin", "omasnap");
+const LAUNCH = join(ROOT, "bin", "omacodesnap");
 
 function scratchHome() {
-  const home = mkdtempSync(join(tmpdir(), "omasnap-install-"));
+  const home = mkdtempSync(join(tmpdir(), "omacodesnap-install-"));
   mkdirSync(join(home, ".local", "bin"), { recursive: true });
   return home;
 }
@@ -77,9 +77,9 @@ function run(home, args, path) {
   return { code: result.status, out: result.stdout, err: result.stderr };
 }
 
-const pluginPath = home => join(home, ".config", "omarchy", "plugins", "com.keithrowell.omasnap");
-const desktopPath = home => join(home, ".local", "share", "applications", "Omasnap.desktop");
-const launcherPath = home => join(home, ".local", "bin", "omasnap");
+const pluginPath = home => join(home, ".config", "omarchy", "plugins", "com.keithrowell.omacodesnap");
+const desktopPath = home => join(home, ".local", "share", "applications", "OmaCodeSnap.desktop");
+const launcherPath = home => join(home, ".local", "bin", "omacodesnap");
 
 test("--dry-run in a fresh home reports what it would do and creates nothing", () => {
   const home = scratchHome();
@@ -95,7 +95,7 @@ test("--dry-run in a fresh home reports what it would do and creates nothing", (
     assert.deepEqual(readdirSync(join(home, ".local", "bin")), []);
     assert.match(result.out, /not applied/);
     assert.match(result.out, /o\.bind\(/);
-    assert.match(result.out, /o\.window\(\{ title = "\^\(Omasnap\)\$" \}, \{ float = true, center = true \}\)/);
+    assert.match(result.out, /o\.window\(\{ title = "\^\(OmaCodeSnap\)\$" \}, \{ float = true, center = true \}\)/);
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
@@ -119,7 +119,7 @@ test("first run links the plugin, writes the desktop file and links the launcher
     assert.doesNotMatch(second.out, /written|linked /);
 
     const apps = readdirSync(join(home, ".local", "share", "applications")).filter(f => f.endsWith(".desktop"));
-    assert.deepEqual(apps, ["Omasnap.desktop"]);
+    assert.deepEqual(apps, ["OmaCodeSnap.desktop"]);
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
@@ -141,8 +141,8 @@ test("the plugin symlink, launcher and desktop file all point at this checkout",
     const lines = text.trimEnd().split("\n");
     assert.equal(lines[0], "[Desktop Entry]");
     assert.ok(lines.includes("Type=Application"));
-    assert.ok(lines.includes("Name=Omasnap"));
-    assert.ok(lines.includes(`Exec="${LAUNCH}"`), "Exec is the checkout's bin/omasnap, quoted");
+    assert.ok(lines.includes("Name=OmaCodeSnap"));
+    assert.ok(lines.includes(`Exec="${LAUNCH}"`), "Exec is the checkout's bin/omacodesnap, quoted");
     assert.ok(lines.includes("Terminal=false"));
     assert.ok(!lines.some(l => l.startsWith("StartupWMClass")));
     assert.ok(!lines.some(l => l.startsWith("Icon=")));
@@ -185,7 +185,7 @@ test("a foreign plugin directory is left alone; the rest of the install still ha
 });
 
 test("without ~/.local/bin the launcher is skipped and everything else still lands", () => {
-  const home = mkdtempSync(join(tmpdir(), "omasnap-install-"));
+  const home = mkdtempSync(join(tmpdir(), "omacodesnap-install-"));
   try {
     const path = basePath(home);
     const result = run(home, [], path);
@@ -266,10 +266,10 @@ test("the Hyprland binding uses uwsm-app when it is on PATH, and says so plainly
     const uwsmPath = basePath(withUwsm);
     addStub(uwsmPath, "uwsm-app");
     const first = run(withUwsm, ["--dry-run"], uwsmPath);
-    assert.match(first.out, /o\.bind\("SUPER \+ ALT \+ SHIFT \+ S", "Omasnap", "uwsm-app -- ~\/\.config\/omarchy\/plugins\/com\.keithrowell\.omasnap\/bin\/omasnap"\)/);
+    assert.match(first.out, /o\.bind\("SUPER \+ ALT \+ SHIFT \+ S", "OmaCodeSnap", "uwsm-app -- ~\/\.config\/omarchy\/plugins\/com\.keithrowell\.omacodesnap\/bin\/omacodesnap"\)/);
 
     const bareResult = run(withoutUwsm, ["--dry-run"], basePath(withoutUwsm));
-    assert.match(bareResult.out, /o\.bind\("SUPER \+ ALT \+ SHIFT \+ S", "Omasnap", "~\/\.config\/omarchy\/plugins\/com\.keithrowell\.omasnap\/bin\/omasnap"\)/);
+    assert.match(bareResult.out, /o\.bind\("SUPER \+ ALT \+ SHIFT \+ S", "OmaCodeSnap", "~\/\.config\/omarchy\/plugins\/com\.keithrowell\.omacodesnap\/bin\/omacodesnap"\)/);
     assert.match(bareResult.out, /uwsm-app is not on PATH/);
   } finally {
     rmSync(withUwsm, { recursive: true, force: true });
@@ -312,9 +312,9 @@ test("--uninstall leaves foreign files alone", () => {
     mkdirSync(pluginPath(home), { recursive: true });
     const appDir = join(home, ".local", "share", "applications");
     mkdirSync(appDir, { recursive: true });
-    const foreignDesktop = "[Desktop Entry]\nType=Application\nName=Omasnap\nExec=/opt/other/bin/omasnap\n";
+    const foreignDesktop = "[Desktop Entry]\nType=Application\nName=OmaCodeSnap\nExec=/opt/other/bin/omacodesnap\n";
     writeFileSync(desktopPath(home), foreignDesktop);
-    symlinkSync("/opt/other/bin/omasnap", launcherPath(home));
+    symlinkSync("/opt/other/bin/omacodesnap", launcherPath(home));
 
     const result = run(home, ["--uninstall"], path);
     assert.equal(result.code, 0, result.err);
@@ -322,7 +322,7 @@ test("--uninstall leaves foreign files alone", () => {
     assert.match(result.out, /^desktop file: not ours, left alone /m);
     assert.match(result.out, /^launcher: not ours, left alone /m);
     assert.equal(readFileSync(desktopPath(home), "utf8"), foreignDesktop);
-    assert.equal(readlinkSync(launcherPath(home)), "/opt/other/bin/omasnap");
+    assert.equal(readlinkSync(launcherPath(home)), "/opt/other/bin/omacodesnap");
   } finally {
     rmSync(home, { recursive: true, force: true });
   }

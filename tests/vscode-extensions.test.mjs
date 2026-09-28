@@ -162,7 +162,7 @@ test("resolveActiveVscodeTheme: a configured theme with no matching installed ex
 });
 
 test("readVscodeColorThemeSetting: reads workbench.colorTheme from a fixture settings.json (JSONC, trailing comma and all)", () => {
-  const dir = mkdtempSync(join(tmpdir(), "omasnap-vscode-settings-"));
+  const dir = mkdtempSync(join(tmpdir(), "omacodesnap-vscode-settings-"));
   try {
     // readVscodeColorThemeSetting reads "<home>/.config/Code/User/settings.json" — build that structure under a temp home.
     const fakeHome = join(dir, "fakehome");
@@ -175,7 +175,7 @@ test("readVscodeColorThemeSetting: reads workbench.colorTheme from a fixture set
 });
 
 test("readVscodeColorThemeSetting: no settings file, or no workbench.colorTheme key, is null", () => {
-  const dir = mkdtempSync(join(tmpdir(), "omasnap-vscode-settings-"));
+  const dir = mkdtempSync(join(tmpdir(), "omacodesnap-vscode-settings-"));
   try {
     assert.equal(readVscodeColorThemeSetting(dir), null); // no .config/Code/User/settings.json at all
     mkdirDeep(join(dir, ".config/Code/User"));

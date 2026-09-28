@@ -3,7 +3,7 @@
 Fake and real-but-trimmed extension trees used by `tests/vscode-extensions.test.mjs`
 and `tests/highlight-vscode.test.mjs`, so those tests never depend on what's
 actually installed on the machine running them (see `lib/vscode-extensions.mjs`
-for why Omasnap reads grammars from the real install at runtime instead of
+for why OmaCodeSnap reads grammars from the real install at runtime instead of
 vendoring them).
 
 - `app-root/json/`, `app-root/javascript/` — real `package.json` grammar

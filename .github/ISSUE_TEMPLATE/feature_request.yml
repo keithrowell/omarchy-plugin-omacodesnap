@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest an addition or change to Omasnap
+description: Suggest an addition or change to OmaCodeSnap
 labels: [enhancement]
 body:
   - type: textarea
@@ -24,4 +24,4 @@ body:
   - type: markdown
     attributes:
       value: |
-        A quick read of the project brief (`docs/agentile/brief.md`) and non-goals is worth it before proposing something — Omasnap deliberately stays small and Omarchy-only (no theme picker, no editing/annotation UI, no direct social posting).
+        A quick read of the project brief (`docs/agentile/brief.md`) and non-goals is worth it before proposing something — OmaCodeSnap deliberately stays small and Omarchy-only (no theme picker, no editing/annotation UI, no direct social posting).

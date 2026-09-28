@@ -1,4 +1,4 @@
-# Omasnap
+# OmaCodeSnap
 
 Turn selected code into a beautiful, unmistakably Omarchy image for a social
 post, a doc, or a chat — like codesnap.dev without the macOS traffic lights,
@@ -14,13 +14,13 @@ snapped from shows the code. Read `docs/agentile/brief.md` (imported below) and
 - Input: Wayland primary selection (`wl-paste --primary`), clipboard fallback; focused editor via `hyprctl activewindow`.
 - Theme: `~/.local/state/omarchy/current/theme/` (`colors.toml`, `zed-theme.json`, `vscode.json`), read on every snap.
 - Output: PNG via QML `grabToImage` to the clipboard (`wl-copy`) and `~/Pictures`.
-- Packaging: Omarchy plugin (`manifest.json`, `bin/omasnap`, `bin/install`).
+- Packaging: Omarchy plugin (`manifest.json`, `bin/omacodesnap`, `bin/install`).
 
 ## Commands
 
 - Test: `node --test tests/*.test.mjs` (Node 26 needs the glob; a bare directory fails)
 - Deploy: `bin/install` (symlinks the plugin into `~/.config/omarchy/plugins/`)
-- Run: `bin/omasnap` with something selected, to eyeball it
+- Run: `bin/omacodesnap` with something selected, to eyeball it
 
 ## Conventions
 

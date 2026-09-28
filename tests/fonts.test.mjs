@@ -52,13 +52,13 @@ test("readEditorFont(zed) falls back to the regex scan when the file does not pa
 });
 
 test("readEditorFont falls back to the system font when the settings file is missing", () => {
-  const font = readEditorFont("zed", { home: "/nonexistent/omasnap-fixture-home", fcMatch: () => "Foo Mono" });
+  const font = readEditorFont("zed", { home: "/nonexistent/omacodesnap-fixture-home", fcMatch: () => "Foo Mono" });
   assert.deepEqual(font, { family: "Foo Mono", size: 13, source: "system" });
 });
 
 test("readEditorFont falls back to monospace when the injected fcMatch throws", () => {
   const font = readEditorFont("zed", {
-    home: "/nonexistent/omasnap-fixture-home",
+    home: "/nonexistent/omacodesnap-fixture-home",
     fcMatch: () => {
       throw new Error("fc-match: command not found");
     },
