@@ -40,10 +40,18 @@ welcome; so are issues that just say which editor.
 omarchy plugin add https://github.com/keithrowell/omarchy-plugin-omacodesnap.git --enable
 ```
 
-That's the install. The plugin sets itself up the first time the shell
-loads it: it compiles the Zed grammars, adds an app launcher entry, and
-checks the packages it needs. You'll only hear about it if something is
-missing.
+Then run its setup once, from a terminal:
+
+```bash
+~/.config/omarchy/plugins/com.keithrowell.omacodesnap/bin/install
+```
+
+Setup compiles the Zed grammars into the plugin's own directory, adds an
+app launcher entry (`~/.local/share/applications/OmaCodeSnap.desktop`) and,
+if `~/.local/bin` exists, an `omacodesnap` command there, and checks the
+packages it needs. Enabling the plugin never does any of that by itself; if
+setup hasn't run, it shows one notification saying so. Run it again after
+an update.
 
 Then add the binding to `~/.config/hypr/bindings.lua`:
 
@@ -53,8 +61,22 @@ o.bind("SUPER + ALT + SHIFT + S", "OmaCodeSnap", "~/.config/omarchy/plugins/com.
 o.window({ title = "^(OmaCodeSnap)$" }, { float = true, center = true })
 ```
 
-Update with `omarchy plugin update com.keithrowell.omacodesnap`. Remove with
-`omarchy plugin remove com.keithrowell.omacodesnap` and delete the binding.
+Update with `omarchy plugin update com.keithrowell.omacodesnap`, then run
+`bin/install` again.
+
+## Removing
+
+```bash
+~/.config/omarchy/plugins/com.keithrowell.omacodesnap/bin/install --uninstall
+omarchy plugin remove com.keithrowell.omacodesnap
+```
+
+`--uninstall` removes the launcher entry and the `~/.local/bin/omacodesnap`
+link, and only if they point at this plugin. `omarchy plugin remove` then
+deletes the plugin directory, compiled grammars included. Delete the
+binding from `~/.config/hypr/bindings.lua` yourself. Snaps you saved in
+`~/Pictures` (`omacodesnap-*.png`) are yours and stay. Per-snap scratch
+files live under `$XDG_RUNTIME_DIR/omacodesnap/` and are gone at logout.
 
 It needs these packages, most of which Omarchy already ships. The
 installer checks this exact line and tells you if anything is missing:

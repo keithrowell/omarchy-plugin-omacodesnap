@@ -124,39 +124,41 @@ if [ -z "$FIXTURE" ]; then
     echo "omacodesnap: some Zed grammars are not built yet; run bin/install (highlighting will be plain text until then)" >&2
   fi
 
-  # Per-run files under a 0700 directory, each file itself 0600 (the
-  # selection text passes through SELECTION) — guaranteed by `umask 077`
-  # above, not by the `-m 700` here (belt-and-braces only: it has no effect
-  # if this directory already exists from an earlier run, which is the
-  # common case). All five are cleaned up on exit by default — correct for
-  # benchmark mode and for every early failure below (nothing selected,
-  # `node lib/snap.mjs` failing) — right up until the live path's IPC call
-  # to the OmaCodeSnap shell service actually succeeds, at which point the trap
-  # narrows to just SELECTION/WINDOW (see there): that call returns
-  # immediately, long before the preview it triggered is closed, and the
-  # overlay reads REQUEST (re-highlighting from it when the language
-  # selector is used) and writes PREVIEW_PNG for as long as it stays open.
+  # Per-run files live in their own fresh directory, `run-<id>`, made by
+  # `mktemp -d` (0700, unpredictable name) inside the verified 0700
+  # `$XDG_RUNTIME_DIR/omacodesnap`; the files inside have fixed names, which
+  # is safe because nothing else can have created them in a directory that
+  # did not exist a moment ago. `umask 077` above makes each one 0600.
+  #
+  # The IPC call below hands the shell service only `<id>`, never a path
+  # (ADR-0013): the service rebuilds every path itself from its own
+  # XDG_RUNTIME_DIR and the id, and takes the code root from its own
+  # manifest, so no caller of `omarchy-shell omacodesnap show` can point it
+  # at a file or a directory of their choosing.
+  #
+  # All five files are cleaned up on exit by default — correct for
+  # benchmark mode and for every early failure below — right up until the
+  # IPC call succeeds, at which point the trap narrows to SELECTION/WINDOW:
+  # the overlay reads REQUEST and writes PREVIEW_PNG for as long as it stays
+  # open, and `app/Service.qml` removes the run directory once it closes.
   # That is why `lib/snap.mjs` copies the selection text and window info
-  # *into* REQUEST rather than recording their paths: SELECTION and WINDOW
-  # are gone the moment this script exits. `app/Service.qml` deletes its own
-  # three files once that overlay actually closes (ADR-0003).
+  # *into* REQUEST rather than recording their paths.
   RUNTIME_DIR="$(require_runtime_dir)/omacodesnap"
   mkdir -p -m 700 "$RUNTIME_DIR"
   verify_private_dir "$RUNTIME_DIR"
-  # Unpredictable names, not `-$$` (a PID is guessable/visible to any other
-  # process on the machine): a fixed, predictable path let another same-user
-  # process plant a symlink there ahead of us, which the `>` redirects below
-  # would then write the selection/window/request data through. `mktemp`
-  # creates each file now, atomically and privately (mode 600, verified
-  # above to be inside a directory only this user can write to), so the
-  # later writes reopen a regular file we already own rather than a
-  # pathname an attacker could have raced.
-  SELECTION="$(mktemp "$RUNTIME_DIR/selection-XXXXXXXX.txt")"
-  WINDOW="$(mktemp "$RUNTIME_DIR/window-XXXXXXXX.json")"
-  REQUEST="$(mktemp "$RUNTIME_DIR/request-XXXXXXXX.json")"
-  INPUT="$(mktemp "$RUNTIME_DIR/input-XXXXXXXX.json")"
-  PREVIEW_PNG="$(mktemp "$RUNTIME_DIR/preview-XXXXXXXX.png")"
-  trap 'rm -f "$SELECTION" "$WINDOW" "$REQUEST" "$INPUT" "$PREVIEW_PNG"' EXIT
+  RUN_DIR="$(mktemp -d "$RUNTIME_DIR/run-XXXXXXXXXX")"
+  RUN_ID="${RUN_DIR##*/run-}"
+  SELECTION="$RUN_DIR/selection.txt"
+  WINDOW="$RUN_DIR/window.json"
+  REQUEST="$RUN_DIR/request.json"
+  INPUT="$RUN_DIR/input.json"
+  PREVIEW_PNG="$RUN_DIR/preview.png"
+  IPC_ERROR="$RUN_DIR/ipc-error.txt"
+  remove_run() {
+    rm -f -- "$SELECTION" "$WINDOW" "$REQUEST" "$INPUT" "$PREVIEW_PNG" "$IPC_ERROR"
+    rmdir -- "$RUN_DIR" 2>/dev/null || true
+  }
+  trap remove_run EXIT
 
   NODE_ARGS=(--selection "$SELECTION" --window "$WINDOW" --request "$REQUEST" --out "$INPUT")
   if [ -n "$LANGUAGE" ]; then
@@ -252,33 +254,25 @@ if [ -z "$FIXTURE" ]; then
 
   # Ask the already-running Omarchy shell to show the preview (ADR-0003):
   # app/Service.qml, loaded by the shell as long as this plugin is enabled,
-  # replaces any preview it already has open before creating this one — the
-  # direct replacement for the old design's `qs kill -p .../Main.qml`. The
-  # last two arguments are the OMACODESNAP_AUTO/OMACODESNAP_SHOT_PATH testing hooks;
-  # a normal snap always passes them empty. Testing that path means calling
-  # this IPC target directly, the same way testers previously ran
-  # `qs -p app/Main.qml` directly with those two set as environment
-  # variables, bypassing this script either way.
-  IPC_ERROR="$(mktemp "$RUNTIME_DIR/ipc-error-XXXXXXXX.txt")"
-  if ! omarchy-shell omacodesnap show "$INPUT" "$REQUEST" "$ROOT" "$PREVIEW_PNG" "" "" 2>"$IPC_ERROR"; then
-    err="$(cat "$IPC_ERROR" 2>/dev/null)"
-    rm -f "$IPC_ERROR"
+  # replaces any preview it already has open before creating this one. The
+  # only argument is the run id (ADR-0013); the unattended-testing hooks
+  # (OMACODESNAP_AUTO/OMACODESNAP_SHOT_PATH) exist only in the standalone
+  # `qs -p app/Main.qml` entry point, never on the shell's IPC.
+  if ! omarchy-shell omacodesnap show "$RUN_ID" 2>"$IPC_ERROR"; then
+    err="$(head -c 1024 -- "$IPC_ERROR" 2>/dev/null)"
     echo "omacodesnap: could not reach the OmaCodeSnap shell service ($err)" >&2
     echo "omacodesnap: is the Omarchy shell running, and is the plugin enabled? Run: omarchy plugin enable com.keithrowell.omacodesnap" >&2
     notify-send "OmaCodeSnap" "Not enabled — run: omarchy plugin enable com.keithrowell.omacodesnap" 2>/dev/null || true
-    # The IPC call never reached a service, so no overlay now owns REQUEST/
-    # INPUT/PREVIEW_PNG — leave the default (all five) trap in place.
+    # The IPC call never reached a service, so no overlay owns the run
+    # directory — leave the default trap in place to remove all of it.
     exit 1
   fi
-  rm -f "$IPC_ERROR"
 
-  # Handed off successfully: app/Service.qml's overlay now owns REQUEST,
-  # INPUT and PREVIEW_PNG for as long as it stays open, and deletes them
-  # itself on close. Narrow the trap so this script's own exit doesn't
-  # delete files the still-open preview is about to read or write.
-  # SELECTION and WINDOW stay ours to delete: REQUEST carries their
-  # contents, so nothing reads them after this point.
-  trap 'rm -f "$SELECTION" "$WINDOW"' EXIT
+  # Handed off successfully: app/Service.qml's overlay now owns the run
+  # directory (REQUEST, INPUT, PREVIEW_PNG) for as long as it stays open,
+  # and removes it on close. Narrow the trap so this script's own exit
+  # doesn't delete files the still-open preview is about to read or write.
+  trap 'rm -f -- "$SELECTION" "$WINDOW" "$IPC_ERROR"' EXIT
 
   exit 0
 fi

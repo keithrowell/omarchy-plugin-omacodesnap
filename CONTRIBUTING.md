@@ -37,8 +37,13 @@ bin/build-grammars --check         # report missing/stale grammars without build
 
 `--fixture` renders the same frame the live window uses, against the
 current theme by default; `--theme-dir` and `--wallpaper` pick another.
-`OMACODESNAP_AUTO=copy|save|shot|none bin/omacodesnap` drives the live preview
-unattended, for testing Copy/Save without a human.
+The standalone entry point drives the preview unattended, for testing
+Copy/Save/the language selector without a human. Build the two files with
+`node lib/snap.mjs --selection F --window F --request R --out I`, then run
+`OMACODESNAP_INPUT=I OMACODESNAP_REQUEST=R OMACODESNAP_ROOT=$PWD
+OMACODESNAP_PREVIEW_PNG=… OMACODESNAP_AUTO=copy|save|shot|lang:<id>
+OMACODESNAP_MODE=preview qs -p app/Main.qml`. These hooks exist only there;
+the shell service's IPC takes a run id and nothing else (ADR-0013).
 
 **After changing anything under `app/`, run `omarchy-restart-shell`.** The
 Omarchy shell loads `Service.qml`/`Overlay.qml`/`Snap.qml` once and never
@@ -52,7 +57,7 @@ com.keithrowell.omacodesnap`. `bin/install --dry-run` shows what it would do,
 `--uninstall` reverses it.
 
 `docs/agentile/` and `docs/adr/` carry the backlog and the decision records
-this project is built from (see `CLAUDE.md`).
+this project is built from (see `docs/DEVELOPING.md`).
 
 ## Ground rules
 
@@ -94,7 +99,7 @@ issue.
 ## Project structure and internal workflow
 
 This repo runs its own development process (the "Agentile" loop — capture →
-shape → spec → plan → build → verify → ship) documented in `CLAUDE.md` and
+shape → spec → plan → build → verify → ship) documented in `docs/DEVELOPING.md` and
 `docs/agentile/`. That's the maintainer's internal workflow, not a
 requirement for contributors — you don't need it to submit a PR, but the
 specs under `docs/agentile/specs/` and the ADRs under `docs/adr/` are useful

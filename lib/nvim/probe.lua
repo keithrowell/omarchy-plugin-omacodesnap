@@ -17,7 +17,7 @@
 -- `hasSelection: false` means no other field but `filetype`/`colorscheme`
 -- is meaningful — the caller falls back to the Wayland primary selection.
 -- Only the *code's own* colours come from here — the frame chrome/backdrop
--- stays Omarchy-theme-driven for every editor (CLAUDE.md), so this never
+-- stays Omarchy-theme-driven for every editor (docs/DEVELOPING.md), so this never
 -- reports a background colour.
 
 local function hex(n)

@@ -7,8 +7,10 @@
 #   tools/vendor-grammars.sh tsx python       # only these grammars (by grammar name)
 #   tools/vendor-grammars.sh --queries-only   # re-fetch just the Zed query files
 #
-# For each grammar: shallow-clones the pinned repo (a tag with --branch, a
-# commit with --no-checkout + fetch --depth 1 <rev>), copies the minimal
+# Every pin is a full 40-character commit SHA, never a tag or branch (a tag
+# or branch can move after review; ADR-0013). For each grammar: fetches
+# exactly that commit into an empty, hook-free repository, verifies
+# FETCH_HEAD is that commit, checks it out detached, and copies the minimal
 # file set (src/{parser.c,scanner.c,scanner.cc,grammar.json,node-types.json,
 # tree_sitter/}, tree-sitter.json, the licence) into
 # vendor/grammars/<name>/, and writes a SOURCE file recording repo/subdir/
@@ -26,11 +28,6 @@ GRAMMARS_DIR="$ROOT/vendor/grammars"
 QUERIES_DIR="$ROOT/vendor/zed-queries"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
-
-# Populated by vendor_query() as it resolves a branch ref (e.g. "main") to
-# the actual commit it fetched, so SOURCE.md records real commits instead of
-# a moving branch name.
-declare -A RESOLVED_REF
 
 ZED_TAG="v1.18.1"
 ZED_COMMIT="bebe92f469834a287f5a57ed78e8d51a918b8ada"
@@ -53,15 +50,16 @@ done
 
 say() { printf '%s\n' "$*"; }
 
-# Grammar pin table: name | repo | subdir ("" = repo root) | ref | ref-kind (tag|commit) | licence-file
+# Grammar pin table: name | repo | subdir ("" = repo root) | commit SHA | ref-kind (always commit) | licence-file
+# (the release tag each SHA came from is noted where there is one)
 GRAMMAR_TABLE=(
   "tsx|https://github.com/zed-industries/tree-sitter-typescript|tsx|e2c53597d6a5d9cf7bbe8dccde576fe1e46c5899|commit|LICENSE"
   "typescript|https://github.com/zed-industries/tree-sitter-typescript|typescript|e2c53597d6a5d9cf7bbe8dccde576fe1e46c5899|commit|LICENSE"
-  "python|https://github.com/tree-sitter/tree-sitter-python||v0.25.0|tag|LICENSE"
-  "rust|https://github.com/tree-sitter/tree-sitter-rust||v0.24.2|tag|LICENSE"
-  "c|https://github.com/tree-sitter/tree-sitter-c||v0.24.1|tag|LICENSE"
-  "bash|https://github.com/tree-sitter/tree-sitter-bash||v0.25.1|tag|LICENSE"
-  "json|https://github.com/tree-sitter/tree-sitter-json||v0.24.8|tag|LICENSE"
+  "python|https://github.com/tree-sitter/tree-sitter-python||d326e4cad262cf681656e130960e49dfc04c03ea|commit|LICENSE"  # v0.25.0
+  "rust|https://github.com/tree-sitter/tree-sitter-rust||77a3747266f4d621d0757825e6b11edcbf991ca5|commit|LICENSE"  # v0.24.2
+  "c|https://github.com/tree-sitter/tree-sitter-c||7fa1be1b694b6e763686793d97da01f36a0e5c12|commit|LICENSE"  # v0.24.1
+  "bash|https://github.com/tree-sitter/tree-sitter-bash||a06c2e4415e9bc0346c6b86d401879ffb44058f7|commit|LICENSE"  # v0.25.1
+  "json|https://github.com/tree-sitter/tree-sitter-json||ee35a6ebefcef0c5c416c0d1ccec7370cfca5a24|commit|LICENSE"  # v0.24.8
   "yaml|https://github.com/zed-industries/tree-sitter-yaml||baff0b51c64ef6a1fb1f8390f3ad6015b83ec13a|commit|LICENSE"
   "markdown|https://github.com/zed-industries/tree-sitter-markdown|tree-sitter-markdown|b596e737286780d7bfa9fcddceaeeb754574b352|commit|LICENSE"
   "markdown_inline|https://github.com/zed-industries/tree-sitter-markdown|tree-sitter-markdown-inline|b596e737286780d7bfa9fcddceaeeb754574b352|commit|LICENSE"
@@ -70,21 +68,21 @@ GRAMMAR_TABLE=(
   "go|https://github.com/tree-sitter/tree-sitter-go||2346a3ab1bb3857b48b29d779a1ef9799a248cd7|commit|LICENSE"
 )
 
-# Query pin table: lang | kind (zed-builtin|zed-extension) | path-in-repo | repo-url | ref
+# Query pin table: lang | kind (zed-builtin|zed-extension) | path-in-repo | repo-url | commit SHA
 QUERY_TABLE=(
-  "javascript|zed-builtin|javascript|https://github.com/zed-industries/zed|$ZED_TAG"
-  "typescript|zed-builtin|typescript|https://github.com/zed-industries/zed|$ZED_TAG"
-  "tsx|zed-builtin|tsx|https://github.com/zed-industries/zed|$ZED_TAG"
-  "python|zed-builtin|python|https://github.com/zed-industries/zed|$ZED_TAG"
-  "rust|zed-builtin|rust|https://github.com/zed-industries/zed|$ZED_TAG"
-  "c|zed-builtin|c|https://github.com/zed-industries/zed|$ZED_TAG"
-  "bash|zed-builtin|bash|https://github.com/zed-industries/zed|$ZED_TAG"
-  "json|zed-builtin|json|https://github.com/zed-industries/zed|$ZED_TAG"
-  "yaml|zed-builtin|yaml|https://github.com/zed-industries/zed|$ZED_TAG"
-  "markdown|zed-builtin|markdown|https://github.com/zed-industries/zed|$ZED_TAG"
-  "ruby|zed-extension|ruby|https://github.com/zed-extensions/ruby|main"
-  "lua|zed-extension|lua|https://github.com/zed-extensions/lua|main"
-  "go|zed-builtin|go|https://github.com/zed-industries/zed|$ZED_TAG"
+  "javascript|zed-builtin|javascript|https://github.com/zed-industries/zed|$ZED_COMMIT"
+  "typescript|zed-builtin|typescript|https://github.com/zed-industries/zed|$ZED_COMMIT"
+  "tsx|zed-builtin|tsx|https://github.com/zed-industries/zed|$ZED_COMMIT"
+  "python|zed-builtin|python|https://github.com/zed-industries/zed|$ZED_COMMIT"
+  "rust|zed-builtin|rust|https://github.com/zed-industries/zed|$ZED_COMMIT"
+  "c|zed-builtin|c|https://github.com/zed-industries/zed|$ZED_COMMIT"
+  "bash|zed-builtin|bash|https://github.com/zed-industries/zed|$ZED_COMMIT"
+  "json|zed-builtin|json|https://github.com/zed-industries/zed|$ZED_COMMIT"
+  "yaml|zed-builtin|yaml|https://github.com/zed-industries/zed|$ZED_COMMIT"
+  "markdown|zed-builtin|markdown|https://github.com/zed-industries/zed|$ZED_COMMIT"
+  "ruby|zed-extension|ruby|https://github.com/zed-extensions/ruby|a88801c1657f01e02acf428b800e0d7ce2d6f241"
+  "lua|zed-extension|lua|https://github.com/zed-extensions/lua|ec8fe51d2f6b33cacccf90fbcddd705a1edbd0cd"
+  "go|zed-builtin|go|https://github.com/zed-industries/zed|5a9b9558db01a6b906cec2fb70a797affdc58cdd"
 )
 
 wanted() {
@@ -94,15 +92,27 @@ wanted() {
   return 1
 }
 
-clone_pin() {
-  # clone_pin <dest> <repo> <ref> <ref-kind>
-  local dest="$1" repo="$2" ref="$3" kind="$4"
-  if [ "$kind" = "tag" ]; then
-    git clone --quiet --depth 1 --branch "$ref" "$repo" "$dest"
-  else
-    git clone --quiet --no-checkout "$repo" "$dest"
-    (cd "$dest" && git fetch --quiet --depth 1 origin "$ref" && git checkout --quiet FETCH_HEAD)
+require_sha() {
+  if [[ ! "$1" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "vendor-grammars: '$1' is not a full 40-character commit SHA; refusing to fetch it" >&2
+    exit 1
   fi
+}
+
+clone_pin() {
+  # clone_pin <dest> <repo> <sha>: fetch exactly one commit, prove it is the
+  # one asked for, and check it out detached, with repository hooks off.
+  local dest="$1" repo="$2" sha="$3"
+  require_sha "$sha"
+  git -c core.hooksPath=/dev/null init --quiet -- "$dest"
+  git -C "$dest" -c core.hooksPath=/dev/null fetch --quiet --depth 1 -- "$repo" "$sha"
+  local fetched
+  fetched="$(git -C "$dest" rev-parse --verify 'FETCH_HEAD^{commit}')"
+  if [ "$fetched" != "$sha" ]; then
+    echo "vendor-grammars: $repo returned $fetched, not the pinned $sha" >&2
+    exit 1
+  fi
+  git -C "$dest" -c core.hooksPath=/dev/null checkout --quiet --detach "$sha"
 }
 
 vendor_grammar() {
@@ -121,7 +131,7 @@ vendor_grammar() {
 
   say "grammar: vendoring $name from $repo${subdir:+/$subdir} @ $ref"
   local clone="$WORK/$name"
-  clone_pin "$clone" "$repo" "$ref" "$kind"
+  clone_pin "$clone" "$repo" "$ref"
 
   local src="$clone"
   [ -n "$subdir" ] && src="$clone/$subdir"
@@ -187,31 +197,11 @@ vendor_grammar() {
   say "grammar: vendored $name"
 }
 
-# Resolve a branch-like ref (e.g. "main") to the commit it currently points
-# at, via `git ls-remote <repo> HEAD` — so a re-vendor six months from now
-# can't silently record "main" while actually having fetched whatever commit
-# was current on the day this ran. A ref that is already a full commit sha is
-# returned unchanged (no network needed); resolution failure (offline, repo
-# renamed) falls back to the literal ref rather than failing the whole run.
-resolve_ref() {
-  local repo="$1" ref="$2"
-  if [[ "$ref" =~ ^[0-9a-f]{40}$ ]]; then
-    echo "$ref"
-    return
-  fi
-  local resolved
-  resolved="$(git ls-remote "$repo" HEAD 2>/dev/null | cut -f1)"
-  if [[ "$resolved" =~ ^[0-9a-f]{40}$ ]]; then
-    echo "$resolved"
-  else
-    echo "$ref"
-  fi
-}
-
 vendor_query() {
   local row="$1"
   IFS='|' read -r lang kind path repo ref <<<"$row"
   wanted "$lang" || return 0
+  require_sha "$ref"
 
   local dest="$QUERIES_DIR/$lang"
   # Checks for highlights.scm itself, not just the directory: a run that
@@ -229,13 +219,6 @@ vendor_query() {
   else
     raw_base="${repo/github.com/raw.githubusercontent.com}/$ref/languages/$path"
   fi
-
-  # Fetch by branch/tag name (raw_base above), but record the actual commit
-  # that name resolved to at fetch time — a branch like "main" moves, and
-  # SOURCE should say what was really vendored, not a name that will drift.
-  local resolved_ref
-  resolved_ref="$(resolve_ref "$repo" "$ref")"
-  RESOLVED_REF["$lang"]="$resolved_ref"
 
   say "query: fetching $lang from $raw_base"
   curl -sf -o "$dest/highlights.scm" "$raw_base/highlights.scm"
@@ -262,7 +245,7 @@ vendor_query() {
   {
     echo "url:     $raw_base/highlights.scm"
     echo "repo:    $repo"
-    echo "ref:     $resolved_ref"
+    echo "ref:     $ref"
     echo "fetched: $DATE"
     echo "licence: $licence_note"
   } >"$dest/SOURCE"
