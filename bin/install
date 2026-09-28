@@ -165,11 +165,14 @@ else
   say "launcher: skipped ($BIN_DIR does not exist; create it to get an omacodesnap command)"
 fi
 
-# Required packages: the single source of truth is the `pacman -S --needed
-# ...` line in README.md, so the check and the docs can never drift apart.
+# Required packages: the single source of truth is the list under the
+# `<!-- required-packages -->` marker in README.md, so the check and the docs
+# can never drift apart.
 # Read-only, so it runs under --dry-run too; a missing package is reported
 # but never fails the install (the deploy gate must never block on it).
-PKG_LINE="$(grep -m1 -oE 'pacman -S --needed .*' "$ROOT/README.md" | cut -d' ' -f4-)"
+# The marker, the opening fence, then the one line of package names.
+mapfile -t PKG_BLOCK < <(grep -m1 -A2 -F '<!-- required-packages -->' "$ROOT/README.md")
+PKG_LINE="${PKG_BLOCK[2]:-}"
 read -ra PKGS <<< "$PKG_LINE"
 
 if ! command -v pacman >/dev/null 2>&1; then
@@ -186,7 +189,7 @@ else
     say "packages: all ${#PKGS[@]} present"
   else
     say "packages: missing ${missing[*]}"
-    say "  sudo pacman -S --needed ${missing[*]}"
+    say "  install them from the Arch repositories, then run bin/install again"
   fi
 fi
 

@@ -326,6 +326,57 @@ test("buildInput: an explicit headerFont passes straight through", () => {
   assert.equal(input.headerFont, "Iosevka");
 });
 
+// --- wrap (lib/wrap.mjs, wired in via buildInput) -------------------------
+
+test("buildInput: wrap defaults to 80 characters; a short fixture (HELLO's longest line is 37) is unaffected", () => {
+  const input = buildInput({ snap: HELLO, theme: GRUVBOX });
+  assert.equal(input.snap.wrap, true);
+  assert.equal(input.snap.wrapWidth, 80);
+  assert.equal(input.snap.lines.length, HELLO.lines.length);
+  assert.deepEqual(input.snap.lineNumbers, HELLO.lines.map((_, i) => i + 1));
+});
+
+test("buildInput: a fixture line past the wrap width reflows into extra rows, continuation rows numbered null", () => {
+  const wide = { ...HELLO, lines: [[{ text: "a".repeat(25) }], [{ text: "short" }]] };
+  const input = buildInput({ snap: wide, theme: GRUVBOX, wrapWidth: 10 });
+  // 25 chars at width 10 -> 3 rows, plus the second line's own 1 row.
+  assert.equal(input.snap.lines.length, 4);
+  assert.deepEqual(input.snap.lineNumbers, [1, null, null, 2]);
+  assert.equal(input.snap.lines[0].map((s) => s.text).join("").length, 10);
+  assert.equal(input.snap.lines[2].map((s) => s.text).join("").length, 5);
+});
+
+test("buildInput: wrap: false leaves lines exactly as resolveSpans produced them, one row per source line", () => {
+  const wide = { ...HELLO, lines: [[{ text: "a".repeat(200) }]] };
+  const input = buildInput({ snap: wide, theme: GRUVBOX, wrap: false });
+  assert.equal(input.snap.wrap, false);
+  assert.equal(input.snap.lines.length, 1);
+  assert.equal(input.snap.lines[0].map((s) => s.text).join("").length, 200);
+  assert.deepEqual(input.snap.lineNumbers, [1]);
+});
+
+test("buildInput: wrapping runs after tab expansion, so a tab counts as the columns it renders, not one character", () => {
+  // A tab at column 0 expands to 4 spaces (tabWidth); six of them is 24
+  // rendered columns even though the raw span text is only 6 characters.
+  const withTabs = { ...HELLO, lines: [[{ text: "\t".repeat(6) }]] };
+  const input = buildInput({ snap: withTabs, theme: GRUVBOX, wrapWidth: 10 });
+  assert.equal(input.snap.lines.length, 3); // 24 columns at width 10 -> 3 rows
+});
+
+test("CLI: --wrap-width reflows a long fixture line; --no-wrap turns it off", () => {
+  const wrapped = JSON.parse(
+    execFileSync(process.execPath, [join(ROOT, "lib", "input.mjs"), "--fixture", LONG_PATH, "--theme-dir", GRUVBOX_DIR, "--wrap-width", "80"], { encoding: "utf8" }),
+  );
+  assert.ok(wrapped.snap.lines.length > LONG.lines.length, "expected extra rows from wrapping the 240-char line");
+  assert.ok(wrapped.snap.lines.every((line) => line.map((s) => s.text).join("").length <= 80));
+
+  const unwrapped = JSON.parse(
+    execFileSync(process.execPath, [join(ROOT, "lib", "input.mjs"), "--fixture", LONG_PATH, "--theme-dir", GRUVBOX_DIR, "--no-wrap"], { encoding: "utf8" }),
+  );
+  assert.equal(unwrapped.snap.lines.length, LONG.lines.length);
+  assert.equal(unwrapped.snap.wrap, false);
+});
+
 // --- buildInput: subtitle/showGutter/compact (OmaWordl share-fit) --------
 
 test("buildInput: an explicit subtitle passes through verbatim into snap.subtitle, no case change", () => {

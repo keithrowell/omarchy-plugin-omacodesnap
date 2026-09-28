@@ -337,6 +337,21 @@ Item {
 
         const codeWidth = Math.min(longest, maxCodeWidth);
 
+        // The gutter's own numbers: `snapData.lineNumbers` (from
+        // `lib/wrap.mjs` via `buildInput`) has one entry per row in
+        // `outLines`, `null` on a wrapped line's continuation rows — those
+        // render with a blank gutter cell, the conventional soft-wrap
+        // treatment. A row beyond `lineNumbers.length` only happens for the
+        // blank filler rows padding a short snap up to `minLines`, which
+        // were never real source lines to begin with; numbering them
+        // sequentially past the real content matches this frame's
+        // long-standing behaviour (unrelated to wrapping).
+        const rawLineNumbers = Array.isArray(snapData.lineNumbers) ? snapData.lineNumbers : outLines.map((_, i) => i + 1);
+        const gutterNumbers = [];
+        for (let i = 0; i < renderedLineCount; i++) {
+            gutterNumbers.push(i < rawLineNumbers.length ? rawLineNumbers[i] : i + 1);
+        }
+
         // In compact mode there is no `minWidth` floor to incidentally give
         // the header room (see below) — a short-content, long-title render
         // (OmaWordl's own case: a few lines of "██" under a real title like
@@ -371,6 +386,7 @@ Item {
             lines: outLines,
             lineWidths: lineWidths,
             centerContent: centerContent,
+            lineNumbers: gutterNumbers,
             renderedLineCount: renderedLineCount,
             gutterWidth: gutterWidth,
             showGutter: showGutter,
@@ -547,6 +563,8 @@ Item {
             // and reclaims its width entirely — `frame.gutterWidth` is
             // already 0 in that case, so `codeColumn` below starts right
             // after `padding`.
+            // Blank on a wrapped line's continuation rows (`frame.lineNumbers`
+            // is `null` there) — the conventional soft-wrap treatment.
             Column {
                 id: gutterColumn
                 x: frame ? frame.padding : 0
@@ -562,7 +580,7 @@ Item {
                         height: frame.lineHeight
                         horizontalAlignment: Text.AlignRight
                         verticalAlignment: Text.AlignVCenter
-                        text: String(index + 1)
+                        text: frame.lineNumbers[index] !== null && frame.lineNumbers[index] !== undefined ? String(frame.lineNumbers[index]) : ""
                         textFormat: Text.PlainText
                         color: frame.lineNumberColor
                         font.family: frame.fontFamily
