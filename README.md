@@ -80,11 +80,12 @@ files live under `$XDG_RUNTIME_DIR/omacodesnap/` and are gone at logout.
 Your saved wrap setting, `~/.local/state/omacodesnap/settings.json` (or
 under `$XDG_STATE_HOME`), stays too; delete that directory to forget it.
 
-It needs these packages, most of which Omarchy already ships. The
-installer checks this exact line and tells you if anything is missing:
+It needs these Arch packages, most of which Omarchy already ships.
+`bin/install` checks this exact list and names any that are missing:
 
+<!-- required-packages -->
 ```
-sudo pacman -S --needed quickshell wl-clipboard qt6-5compat tree-sitter-cli gcc nodejs
+quickshell wl-clipboard qt6-5compat tree-sitter-cli gcc nodejs
 ```
 
 ## Using it

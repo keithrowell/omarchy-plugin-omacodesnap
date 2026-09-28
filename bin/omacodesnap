@@ -38,7 +38,7 @@ usage() {
 
 if ! command -v qs >/dev/null 2>&1; then
   echo "omacodesnap: 'qs' (Quickshell) was not found on PATH." >&2
-  echo "Install it with: sudo pacman -S quickshell" >&2
+  echo "Install the quickshell package." >&2
   exit 1
 fi
 
@@ -112,7 +112,7 @@ done
 if [ -z "$FIXTURE" ]; then
   if ! command -v node >/dev/null 2>&1; then
     echo "omacodesnap: 'node' was not found on PATH." >&2
-    echo "Install it with: sudo pacman -S nodejs" >&2
+    echo "Install the nodejs package." >&2
     exit 1
   fi
 
@@ -285,7 +285,7 @@ fi
 
 if ! command -v node >/dev/null 2>&1; then
   echo "omacodesnap: 'node' was not found on PATH." >&2
-  echo "Install it with: sudo pacman -S nodejs" >&2
+  echo "Install the nodejs package." >&2
   exit 1
 fi
 

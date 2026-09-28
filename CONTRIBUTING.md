@@ -13,10 +13,11 @@ quickshell). You'll need a real Omarchy machine, or something close enough
 to it, to develop and test against — this isn't something you can build or
 run on macOS/Windows/generic Linux.
 
-Install the runtime dependencies (see the README's package line):
+Install the runtime dependencies listed in the README (`bin/install`
+names any that are missing):
 
-```bash
-sudo pacman -S --needed quickshell wl-clipboard qt6-5compat tree-sitter-cli gcc nodejs
+```
+quickshell wl-clipboard qt6-5compat tree-sitter-cli gcc nodejs
 ```
 
 ## Development loop

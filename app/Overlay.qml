@@ -261,7 +261,7 @@ FloatingWindow {
             if (exitCode === 0) {
                 previewWindow.notify("OmaCodeSnap", "Copied to clipboard");
             } else {
-                previewWindow.notify("OmaCodeSnap", "Copy failed: install wl-clipboard (sudo pacman -S wl-clipboard)");
+                previewWindow.notify("OmaCodeSnap", "Copy failed: install the wl-clipboard package");
             }
         }
     }

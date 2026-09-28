@@ -28,12 +28,12 @@ done
 
 if ! command -v tree-sitter >/dev/null 2>&1; then
   echo "build-grammars: 'tree-sitter' (tree-sitter-cli) was not found on PATH." >&2
-  echo "Install it with: sudo pacman -S tree-sitter-cli" >&2
+  echo "Install the tree-sitter-cli package." >&2
   exit 1
 fi
 if ! command -v cc >/dev/null 2>&1 && ! command -v gcc >/dev/null 2>&1; then
   echo "build-grammars: no C compiler ('cc'/'gcc') was found on PATH." >&2
-  echo "Install one with: sudo pacman -S --needed base-devel" >&2
+  echo "Install one (the gcc package, or base-devel)." >&2
   exit 1
 fi
 

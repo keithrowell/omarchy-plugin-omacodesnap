@@ -211,7 +211,7 @@ test("packages: skipped when pacman is not on PATH", () => {
   }
 });
 
-test("packages: reports missing packages and the install line, without failing the install", () => {
+test("packages: reports missing packages, without failing the install", () => {
   const home = scratchHome();
   try {
     const path = basePath(home);
@@ -219,7 +219,8 @@ test("packages: reports missing packages and the install line, without failing t
     const result = run(home, ["--dry-run"], path);
     assert.equal(result.code, 0, result.err);
     assert.match(result.out, /^packages: missing tree-sitter-cli gcc$/m);
-    assert.match(result.out, /^ {2}sudo pacman -S --needed tree-sitter-cli gcc$/m);
+    assert.match(result.out, /^ {2}install them from the Arch repositories/m);
+    assert.doesNotMatch(result.out, /sudo|--needed/);
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
@@ -247,8 +248,8 @@ test("the required-packages line in README.md is exactly what bin/install checks
     assert.equal(result.code, 0, result.err);
 
     const readme = readFileSync(join(ROOT, "README.md"), "utf8");
-    const match = readme.match(/pacman -S --needed (.+)/);
-    assert.ok(match, "README has a `pacman -S --needed ...` line");
+    const match = readme.match(/<!-- required-packages -->\n```\n(.+)\n```/);
+    assert.ok(match, "README has a package list under <!-- required-packages -->");
     const expected = match[1].trim().split(/\s+/);
 
     const argv = readFileSync(join(path, "argv.txt"), "utf8").trim().split("\n");
