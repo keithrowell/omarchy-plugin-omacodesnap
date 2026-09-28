@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { wrapLine, wrapLines } from "../lib/wrap.mjs";
+import { breakText, wrapLine, wrapLines } from "../lib/wrap.mjs";
 
 function span(text, color = "#fff") {
   return { text, color, fontStyle: null, fontWeight: null };
@@ -33,16 +33,18 @@ test("wrapLine: a single span longer than width hard-breaks at exactly width cha
   assert.deepEqual(rows.map((r) => r.map((s) => s.text).join("")), ["a".repeat(10), "a".repeat(10), "a".repeat(5)]);
 });
 
-test("wrapLine: a break inside a multi-span line splits the crossing span, keeping each half's own colour", () => {
-  // "function " (9, blue) + "hi" (2, green) at width 10: the break falls
-  // one character into the second span.
+test("wrapLine: a word-boundary break drops the space and keeps each span's own colour", () => {
+  // "function " (9, blue) + "hi" (2, green) at width 10: the space is the
+  // last boundary that fits, so the row ends before it and "hi" moves down.
   const spans = [span("function ", "#00f"), span("hi", "#0f0")];
   const rows = wrapLine(spans, 10);
-  assert.equal(rows.length, 2);
-  assert.deepEqual(rows[0], [span("function ", "#00f"), span("h", "#0f0")]);
-  assert.deepEqual(rows[1], [span("i", "#0f0")]);
-  // Round-trips: every character survives the split, none duplicated.
-  assert.equal(rows.flat().map((s) => s.text).join(""), spans.map((s) => s.text).join(""));
+  assert.deepEqual(rows, [[span("function", "#00f")], [span("hi", "#0f0")]]);
+});
+
+test("wrapLine: a break inside a span splits it, both halves keeping its colour", () => {
+  const spans = [span("# the quick brown", "#888")];
+  const rows = wrapLine(spans, 12);
+  assert.deepEqual(rows, [[span("# the quick", "#888")], [span("brown", "#888")]]);
 });
 
 test("wrapLine: a break landing exactly on a span boundary needs no split", () => {
@@ -79,15 +81,60 @@ test("wrapLines: a wrapped line's continuation rows get null, later lines keep t
   assert.deepEqual(lineNumbers, [1, null, null, 2]);
 });
 
-test("wrapLines: every row's text, concatenated back per source line, reproduces the original line", () => {
+test("wrapLines: rows rejoined with the dropped spaces reproduce each source line", () => {
   const lines = [[span("the quick brown fox jumps over")], [span("x")]];
   const { lines: outLines, lineNumbers } = wrapLines(lines, 8);
-  let rebuilt = "";
-  const bySourceLine = new Map();
-  outLines.forEach((row, i) => {
-    const n = lineNumbers[i] ?? [...bySourceLine.keys()].pop();
-    bySourceLine.set(n, (bySourceLine.get(n) ?? "") + row.map((s) => s.text).join(""));
-  });
-  assert.equal(bySourceLine.get(1), "the quick brown fox jumps over");
-  assert.equal(bySourceLine.get(2), "x");
+  const rows = outLines.map((row) => row.map((s) => s.text).join(""));
+  assert.deepEqual(rows, ["the", "quick", "brown", "fox", "jumps", "over", "x"]);
+  assert.deepEqual(lineNumbers, [1, null, null, null, null, null, 2]);
+});
+
+// --- breakText: where rows break -----------------------------------------------
+
+function rowsOf(text, width) {
+  return breakText(text, width).map(([a, b]) => text.slice(a, b));
+}
+
+test("breakText: breaks at the last space that fits, never mid-word", () => {
+  assert.deepEqual(rowsOf("return someValue + otherValue;", 20), ["return someValue +", "otherValue;"]);
+});
+
+test("breakText: a word that ends exactly at the width is kept whole", () => {
+  assert.deepEqual(rowsOf("abcde fghij", 5), ["abcde", "fghij"]);
+});
+
+test("breakText: a run of several spaces at the break is dropped entirely", () => {
+  assert.deepEqual(rowsOf("alpha     beta", 7), ["alpha", "beta"]);
+});
+
+test("breakText: a hyphen joining two words stays at the end of the row that did not wrap", () => {
+  assert.deepEqual(rowsOf("die Donau-Dampfschifffahrt", 16), ["die Donau-", "Dampfschifffahrt"]);
+});
+
+test("breakText: the later of a space and a hyphen wins", () => {
+  // The hyphen in "well-known" comes after the space before it.
+  assert.deepEqual(rowsOf("a well-known fact", 10), ["a well-", "known fact"]);
+});
+
+test("breakText: a hyphen not between two word characters is not a break point", () => {
+  // In "--verbose-flag" only the last hyphen joins two word characters;
+  // in "x - y" the hyphen stands alone, so the spaces are the boundaries.
+  assert.deepEqual(rowsOf("run --verbose-flag now", 14), ["run --verbose-", "flag now"]);
+  assert.deepEqual(rowsOf("total = x - y", 11), ["total = x -", "y"]);
+});
+
+test("breakText: a word longer than the width hard-breaks at exactly the width", () => {
+  assert.deepEqual(rowsOf("go https://example.com/a/very/long/path", 12), ["go", "https://exam", "ple.com/a/ve", "ry/long/path"]);
+});
+
+test("breakText: the line's own leading indentation is never a break point", () => {
+  assert.deepEqual(rowsOf("    return aVeryLongName", 16), ["    return", "aVeryLongName"]);
+});
+
+test("breakText: trailing whitespace past the width adds no empty row", () => {
+  assert.deepEqual(rowsOf("abc" + " ".repeat(20), 10), ["abc"]);
+});
+
+test("breakText: non-ASCII letters count as word characters for the hyphen rule", () => {
+  assert.deepEqual(rowsOf("Größen-Übersicht", 10), ["Größen-", "Übersicht"]);
 });
