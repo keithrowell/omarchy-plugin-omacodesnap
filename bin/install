@@ -4,13 +4,14 @@
 #   bin/install [--dry-run] [--uninstall]
 #
 # Symlinks this checkout into ~/.config/omarchy/plugins/com.keithrowell.omacodesnap
-# (unless something else is already there, or this checkout already is that
-# directory), writes the desktop file the app launcher reads, links an
-# `omacodesnap` launcher into ~/.local/bin when that directory exists, checks the
-# required packages from README.md are installed, and prints (never applies)
-# the Hyprland binding and window rule. Idempotent: a second run reports
-# "unchanged". Works from this checkout and from the plugin path itself (a
-# submodule clone).
+# (unless this checkout already is that directory), writes the desktop file
+# the app launcher reads, links an `omacodesnap` launcher into ~/.local/bin
+# when that directory exists, checks the required packages from README.md are
+# installed, and prints (never applies) the Hyprland binding and window rule.
+# It never replaces anything at those paths except this checkout's own
+# desktop entry and links; anything else there is reported and left alone.
+# Idempotent: a second run reports "unchanged". Works from this checkout and
+# from the plugin path itself (a submodule clone).
 set -euo pipefail
 
 usage() {
@@ -36,7 +37,9 @@ PLUGIN_DIR='~/.config/omarchy/plugins/com.keithrowell.omacodesnap'
 PLUGIN="$HOME/.config/omarchy/plugins/com.keithrowell.omacodesnap"
 PLUGIN_ID="com.keithrowell.omacodesnap"
 
-DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+# The XDG spec says a relative XDG_DATA_HOME is invalid and must be ignored.
+DATA_HOME="${XDG_DATA_HOME:-}"
+[[ "$DATA_HOME" == /* ]] || DATA_HOME="$HOME/.local/share"
 APP_DIR="$DATA_HOME/applications"
 DESKTOP="$APP_DIR/OmaCodeSnap.desktop"
 BIN_DIR="$HOME/.local/bin"
@@ -50,13 +53,14 @@ fi
 say() { printf '%s\n' "$*"; }
 would() { if (( DRY_RUN )); then say "$1: would $2"; return 0; else return 1; fi; }
 
-# Uninstall removes only what this checkout owns: a plugin symlink that
-# resolves to ROOT, a desktop file whose Exec points into ROOT, and a
+# Install replaces and uninstall removes only what this checkout owns: a
+# plugin symlink that resolves to ROOT, a regular desktop file (never a
+# symlink) with a line that is exactly the Exec this script writes, and a
 # launcher symlink that points at ROOT's bin/omacodesnap. Anything else with
 # those names is reported and left alone. A submodule checkout (ROOT is
 # itself PLUGIN) is never removed.
 owns_desktop() {
-  [[ -f "$DESKTOP" ]] && grep -qF -e "Exec=\"$ROOT/" -e "Exec=$ROOT/" -- "$DESKTOP"
+  [[ -f "$DESKTOP" && ! -L "$DESKTOP" ]] && grep -qxF -e "Exec=\"$LAUNCH\"" -e "Exec=$LAUNCH" -- "$DESKTOP"
 }
 owns_launcher() {
   [[ -L "$LAUNCHER" && "$(readlink "$LAUNCHER")" == "$LAUNCH" ]]
@@ -99,10 +103,6 @@ if (( UNINSTALL )); then
   else
     say "launcher: absent"
   fi
-
-  if (( ! DRY_RUN )) && command -v update-desktop-database >/dev/null 2>&1 && [[ -d "$APP_DIR" ]]; then
-    update-desktop-database "$APP_DIR" >/dev/null 2>&1 || true
-  fi
   exit 0
 fi
 
@@ -115,7 +115,7 @@ elif [[ -e "$PLUGIN" || -L "$PLUGIN" ]]; then
   say "plugin: not ours, left alone $PLUGIN"
 elif ! would "plugin" "link $PLUGIN -> $ROOT"; then
   mkdir -p "$(dirname "$PLUGIN")"
-  ln -s "$ROOT" "$PLUGIN"
+  ln -sT -- "$ROOT" "$PLUGIN"
   say "plugin: linked $PLUGIN -> $ROOT"
 fi
 
@@ -137,29 +137,56 @@ StartupNotify=false
 EOF
 }
 
-tmp="$(mktemp)"
-trap 'rm -f "$tmp"' EXIT
-desktop_content >"$tmp"
-
-if [[ -f "$DESKTOP" ]] && cmp -s "$tmp" "$DESKTOP"; then
-  say "desktop file: unchanged $DESKTOP"
-elif ! would "desktop file" "write $DESKTOP"; then
-  mkdir -p "$APP_DIR"
-  cp "$tmp" "$DESKTOP"
-  chmod 0644 "$DESKTOP"
-  say "desktop file: written $DESKTOP"
-  if command -v update-desktop-database >/dev/null 2>&1; then
-    update-desktop-database "$APP_DIR" >/dev/null 2>&1 || true
+# Written to a fresh temporary beside the destination and then published, so
+# the write can never go through a symlink planted at $DESKTOP: a new file by
+# hard link, which fails rather than replace anything that appeared meanwhile;
+# our own file by rename. No update-desktop-database: the entry has no
+# MimeType, and the cache it writes is not ours to leave behind.
+content="$(desktop_content)"
+if [[ ! -e "$DESKTOP" && ! -L "$DESKTOP" ]] || owns_desktop; then
+  if owns_desktop && [[ "$(<"$DESKTOP")" == "$content" ]]; then
+    say "desktop file: unchanged $DESKTOP"
+  elif ! would "desktop file" "write $DESKTOP"; then
+    mkdir -p "$APP_DIR"
+    tmp="$(mktemp -p "$APP_DIR" .OmaCodeSnap.desktop.XXXXXXXXXX)"
+    trap 'rm -f -- "$tmp"' EXIT
+    chmod 0644 -- "$tmp"
+    printf '%s\n' "$content" >"$tmp"
+    if owns_desktop; then
+      mv -f -T -- "$tmp" "$DESKTOP"
+      published=1
+    elif ln -T -- "$tmp" "$DESKTOP" 2>/dev/null; then
+      rm -f -- "$tmp"
+      published=1
+    else
+      rm -f -- "$tmp"
+      published=0
+    fi
+    trap - EXIT
+    if (( published )); then
+      say "desktop file: written $DESKTOP"
+    else
+      say "desktop file: not ours, left alone $DESKTOP"
+    fi
   fi
+else
+  say "desktop file: not ours, left alone $DESKTOP"
 fi
 
 # Optional PATH launcher, only when ~/.local/bin already exists.
 if [[ -d "$BIN_DIR" ]]; then
-  if [[ -L "$LAUNCHER" && "$(readlink "$LAUNCHER")" == "$LAUNCH" ]]; then
+  if owns_launcher; then
     say "launcher: unchanged $LAUNCHER -> $LAUNCH"
+  elif [[ -e "$LAUNCHER" || -L "$LAUNCHER" ]]; then
+    say "launcher: not ours, left alone $LAUNCHER"
   elif ! would "launcher" "link $LAUNCHER -> $LAUNCH"; then
-    ln -sfn "$LAUNCH" "$LAUNCHER"
-    say "launcher: linked $LAUNCHER -> $LAUNCH"
+    # No -f, and -T: if anything appears here meanwhile, ln fails rather
+    # than replace it or link inside it.
+    if ln_err="$(ln -sT -- "$LAUNCH" "$LAUNCHER" 2>&1)"; then
+      say "launcher: linked $LAUNCHER -> $LAUNCH"
+    else
+      say "launcher: could not link $LAUNCHER, left as it is (${ln_err##*: })"
+    fi
   fi
 else
   say "launcher: skipped ($BIN_DIR does not exist; create it to get an omacodesnap command)"

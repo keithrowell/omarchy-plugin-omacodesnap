@@ -49,9 +49,10 @@ Then run its setup once, from a terminal:
 Setup compiles the Zed grammars into the plugin's own directory, adds an
 app launcher entry (`~/.local/share/applications/OmaCodeSnap.desktop`) and,
 if `~/.local/bin` exists, an `omacodesnap` command there, and checks the
-packages it needs. Enabling the plugin never does any of that by itself; if
-setup hasn't run, it shows one notification saying so. Run it again after
-an update.
+packages it needs. If anything other than its own entry or link is
+already at either of those paths, setup says so and leaves it alone. Enabling the plugin never
+does any of that by itself; if setup hasn't run, it shows one notification
+saying so. Run it again after an update.
 
 Then add the binding to `~/.config/hypr/bindings.lua`:
 
