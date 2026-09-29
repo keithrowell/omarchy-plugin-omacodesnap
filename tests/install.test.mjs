@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawnSync, execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, existsSync, readFileSync, writeFileSync, readdirSync, readlinkSync, lstatSync, statSync, symlinkSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
@@ -345,6 +345,102 @@ test("--uninstall leaves a desktop-file symlink alone, even when its target look
     assert.match(result.out, /^desktop file: not ours, left alone /m);
     assert.ok(lstatSync(desktopPath(home)).isSymbolicLink());
     assert.ok(statSync(decoy).isFile());
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("a foreign desktop file that merely mentions our Exec line is not ours: install and uninstall leave it", () => {
+  const home = scratchHome();
+  try {
+    const path = basePath(home);
+    mkdirSync(appDirOf(home), { recursive: true });
+    const foreign = `[Desktop Entry]\nName=Mine\nExec=/opt/mine\n# was: ${ourDesktopLine}\nTryExec=${LAUNCH}\n`;
+    writeFileSync(desktopPath(home), foreign);
+
+    const install = run(home, [], path);
+    assert.equal(install.code, 0, install.err);
+    assert.match(install.out, /^desktop file: not ours, left alone /m);
+    const uninstall = run(home, ["--uninstall"], path);
+    assert.equal(uninstall.code, 0, uninstall.err);
+    assert.match(uninstall.out, /^desktop file: not ours, left alone /m);
+    assert.equal(readFileSync(desktopPath(home), "utf8"), foreign);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("a directory, a FIFO or a dangling symlink at the desktop path is left alone", () => {
+  for (const kind of ["directory", "fifo", "dangling"]) {
+    const home = scratchHome();
+    try {
+      const path = basePath(home);
+      mkdirSync(appDirOf(home), { recursive: true });
+      const target = join(home, "nowhere", "file");
+      if (kind === "directory") mkdirSync(desktopPath(home));
+      if (kind === "fifo") execFileSync("/usr/bin/mkfifo", [desktopPath(home)]);
+      if (kind === "dangling") symlinkSync(target, desktopPath(home));
+
+      for (const args of [[], ["--uninstall"]]) {
+        const result = run(home, args, path);
+        assert.equal(result.code, 0, `${kind} ${args}: ${result.err}`);
+        assert.match(result.out, /^desktop file: not ours, left alone /m, `${kind} ${args}`);
+      }
+      const st = lstatSync(desktopPath(home));
+      if (kind === "directory") assert.ok(st.isDirectory());
+      if (kind === "fifo") assert.ok(st.isFIFO());
+      if (kind === "dangling") { assert.ok(st.isSymbolicLink()); assert.ok(!existsSync(target)); }
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  }
+});
+
+test("a directory at the launcher path is left alone and nothing is linked inside it", () => {
+  const home = scratchHome();
+  try {
+    const path = basePath(home);
+    mkdirSync(launcherPath(home));
+    const result = run(home, [], path);
+    assert.equal(result.code, 0, result.err);
+    assert.match(result.out, /^launcher: not ours, left alone /m);
+    assert.deepEqual(readdirSync(launcherPath(home)), []);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("the desktop file goes under a custom XDG_DATA_HOME, and a relative one is ignored", () => {
+  const home = scratchHome();
+  try {
+    const path = basePath(home);
+    const custom = join(home, "data home");
+    const env = xdg => spawnSync(INSTALL, [], { encoding: "utf8", cwd: home, env: { HOME: home, XDG_DATA_HOME: xdg, PATH: path } });
+
+    const absolute = env(custom);
+    assert.equal(absolute.status, 0, absolute.stderr);
+    assert.ok(lstatSync(join(custom, "applications", "OmaCodeSnap.desktop")).isFile());
+
+    const relative = env("rel");
+    assert.equal(relative.status, 0, relative.stderr);
+    assert.ok(!existsSync(join(home, "rel")), "a relative XDG_DATA_HOME is not used");
+    assert.ok(lstatSync(desktopPath(home)).isFile(), "falls back to ~/.local/share");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("setup writes nothing else into the applications directory", () => {
+  const home = scratchHome();
+  try {
+    const path = basePath(home);
+    writeFileSync(join(path, "update-desktop-database"), `#!/usr/bin/bash\n: > "${join(path, "update-desktop-database.called")}"\n`, { mode: 0o755 });
+    run(home, [], path);
+    run(home, ["--uninstall"], path);
+    assert.deepEqual(readdirSync(appDirOf(home)), []);
+    run(home, [], path);
+    assert.deepEqual(readdirSync(appDirOf(home)), ["OmaCodeSnap.desktop"]);
+    assert.ok(!existsSync(join(path, "update-desktop-database.called")));
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
