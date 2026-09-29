@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, existsSync, readFileSync, writeFileSync, readdirSync, readlinkSync, lstatSync, symlinkSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, existsSync, readFileSync, writeFileSync, readdirSync, readlinkSync, lstatSync, statSync, symlinkSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,7 +28,7 @@ function scratchHome() {
 function basePath(home) {
   const dir = join(home, "path");
   mkdirSync(dir, { recursive: true });
-  for (const tool of ["bash", "readlink", "dirname", "mkdir", "ln", "rm", "cmp", "cp", "chmod", "mktemp", "cat", "printf", "grep", "cut"]) {
+  for (const tool of ["bash", "readlink", "dirname", "mkdir", "ln", "rm", "chmod", "mktemp", "mv", "cat", "printf", "grep", "cut"]) {
     const real = join("/usr/bin", tool);
     const link = join(dir, tool);
     if (existsSync(real) && !existsSync(link)) symlinkSync(real, link);
@@ -194,6 +194,157 @@ test("without ~/.local/bin the launcher is skipped and everything else still lan
     assert.match(result.out, /^plugin: linked /m);
     assert.ok(existsSync(desktopPath(home)));
     assert.ok(!existsSync(join(home, ".local", "bin")));
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// Setup must never replace a file it did not create (marketplace review,
+// omacom/omarchy-plugin-marketplace#9111). "Ours" means what --uninstall
+// already means: a regular desktop file whose Exec points into this checkout,
+// and a launcher symlink to this checkout's bin/omacodesnap.
+const appDirOf = home => join(home, ".local", "share", "applications");
+const ourDesktopLine = `Exec="${LAUNCH}"`;
+
+test("a foreign desktop file is left alone, byte for byte; the rest of the install still happens", () => {
+  const home = scratchHome();
+  try {
+    const path = basePath(home);
+    mkdirSync(appDirOf(home), { recursive: true });
+    const foreign = "[Desktop Entry]\nType=Application\nName=Mine\nExec=/opt/mine/run\n";
+    writeFileSync(desktopPath(home), foreign);
+
+    const result = run(home, [], path);
+    assert.equal(result.code, 0, result.err);
+    assert.match(result.out, /^desktop file: not ours, left alone /m);
+    assert.equal(readFileSync(desktopPath(home), "utf8"), foreign);
+    assert.match(result.out, /^launcher: linked /m);
+    assert.deepEqual(readdirSync(appDirOf(home)), ["OmaCodeSnap.desktop"], "no temporary left behind");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("a desktop-file symlink is never written through, even when its target looks like ours", () => {
+  const home = scratchHome();
+  try {
+    const path = basePath(home);
+    mkdirSync(appDirOf(home), { recursive: true });
+    const decoy = join(home, "decoy.txt");
+    const decoyText = `pretend precious file\n${ourDesktopLine}\n`;
+    writeFileSync(decoy, decoyText);
+    symlinkSync(decoy, desktopPath(home));
+
+    const result = run(home, [], path);
+    assert.equal(result.code, 0, result.err);
+    assert.match(result.out, /^desktop file: not ours, left alone /m);
+    assert.equal(readFileSync(decoy, "utf8"), decoyText);
+    assert.ok(lstatSync(desktopPath(home)).isSymbolicLink());
+    assert.equal(readlinkSync(desktopPath(home)), decoy);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("a stale desktop file of our own is replaced with a fresh regular 0644 file", () => {
+  const home = scratchHome();
+  try {
+    const path = basePath(home);
+    mkdirSync(appDirOf(home), { recursive: true });
+    writeFileSync(desktopPath(home), `[Desktop Entry]\nName=Old\n${ourDesktopLine}\n`, { mode: 0o600 });
+
+    const result = run(home, [], path);
+    assert.equal(result.code, 0, result.err);
+    assert.match(result.out, /^desktop file: written /m);
+    const st = lstatSync(desktopPath(home));
+    assert.ok(st.isFile());
+    assert.equal(st.mode & 0o777, 0o644);
+    const text = readFileSync(desktopPath(home), "utf8");
+    assert.ok(text.includes("Name=OmaCodeSnap\n"));
+    assert.ok(!text.includes("Name=Old"));
+    assert.deepEqual(readdirSync(appDirOf(home)), ["OmaCodeSnap.desktop"], "no temporary left behind");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("a fresh desktop file is a regular 0644 file", () => {
+  const home = scratchHome();
+  try {
+    const path = basePath(home);
+    run(home, [], path);
+    const st = lstatSync(desktopPath(home));
+    assert.ok(st.isFile());
+    assert.equal(st.mode & 0o777, 0o644);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("a foreign ~/.local/bin/omacodesnap file is left alone", () => {
+  const home = scratchHome();
+  try {
+    const path = basePath(home);
+    writeFileSync(launcherPath(home), "#!/bin/sh\necho mine\n", { mode: 0o755 });
+
+    const result = run(home, [], path);
+    assert.equal(result.code, 0, result.err);
+    assert.match(result.out, /^launcher: not ours, left alone /m);
+    assert.ok(lstatSync(launcherPath(home)).isFile());
+    assert.equal(readFileSync(launcherPath(home), "utf8"), "#!/bin/sh\necho mine\n");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("a ~/.local/bin/omacodesnap symlink to somewhere else is left alone", () => {
+  const home = scratchHome();
+  try {
+    const path = basePath(home);
+    symlinkSync("/opt/other/bin/omacodesnap", launcherPath(home));
+
+    const result = run(home, [], path);
+    assert.equal(result.code, 0, result.err);
+    assert.match(result.out, /^launcher: not ours, left alone /m);
+    assert.equal(readlinkSync(launcherPath(home)), "/opt/other/bin/omacodesnap");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("--dry-run with foreign files in the way reports them and changes nothing", () => {
+  const home = scratchHome();
+  try {
+    const path = basePath(home);
+    mkdirSync(appDirOf(home), { recursive: true });
+    writeFileSync(desktopPath(home), "mine\n");
+    symlinkSync("/opt/other/bin/omacodesnap", launcherPath(home));
+
+    const result = run(home, ["--dry-run"], path);
+    assert.equal(result.code, 0, result.err);
+    assert.match(result.out, /^desktop file: not ours, left alone /m);
+    assert.match(result.out, /^launcher: not ours, left alone /m);
+    assert.equal(readFileSync(desktopPath(home), "utf8"), "mine\n");
+    assert.equal(readlinkSync(launcherPath(home)), "/opt/other/bin/omacodesnap");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("--uninstall leaves a desktop-file symlink alone, even when its target looks like ours", () => {
+  const home = scratchHome();
+  try {
+    const path = basePath(home);
+    mkdirSync(appDirOf(home), { recursive: true });
+    const decoy = join(home, "decoy.desktop");
+    writeFileSync(decoy, `${ourDesktopLine}\n`);
+    symlinkSync(decoy, desktopPath(home));
+
+    const result = run(home, ["--uninstall"], path);
+    assert.equal(result.code, 0, result.err);
+    assert.match(result.out, /^desktop file: not ours, left alone /m);
+    assert.ok(lstatSync(desktopPath(home)).isSymbolicLink());
+    assert.ok(statSync(decoy).isFile());
   } finally {
     rmSync(home, { recursive: true, force: true });
   }

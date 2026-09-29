@@ -4,13 +4,14 @@
 #   bin/install [--dry-run] [--uninstall]
 #
 # Symlinks this checkout into ~/.config/omarchy/plugins/com.keithrowell.omacodesnap
-# (unless something else is already there, or this checkout already is that
-# directory), writes the desktop file the app launcher reads, links an
-# `omacodesnap` launcher into ~/.local/bin when that directory exists, checks the
-# required packages from README.md are installed, and prints (never applies)
-# the Hyprland binding and window rule. Idempotent: a second run reports
-# "unchanged". Works from this checkout and from the plugin path itself (a
-# submodule clone).
+# (unless this checkout already is that directory), writes the desktop file
+# the app launcher reads, links an `omacodesnap` launcher into ~/.local/bin
+# when that directory exists, checks the required packages from README.md are
+# installed, and prints (never applies) the Hyprland binding and window rule.
+# It never replaces a file it did not create: anything already at one of
+# those paths that is not this checkout's own is reported and left alone.
+# Idempotent: a second run reports "unchanged". Works from this checkout and
+# from the plugin path itself (a submodule clone).
 set -euo pipefail
 
 usage() {
@@ -50,13 +51,14 @@ fi
 say() { printf '%s\n' "$*"; }
 would() { if (( DRY_RUN )); then say "$1: would $2"; return 0; else return 1; fi; }
 
-# Uninstall removes only what this checkout owns: a plugin symlink that
-# resolves to ROOT, a desktop file whose Exec points into ROOT, and a
+# Install replaces and uninstall removes only what this checkout owns: a
+# plugin symlink that resolves to ROOT, a regular desktop file (never a
+# symlink) whose Exec points into ROOT, and a
 # launcher symlink that points at ROOT's bin/omacodesnap. Anything else with
 # those names is reported and left alone. A submodule checkout (ROOT is
 # itself PLUGIN) is never removed.
 owns_desktop() {
-  [[ -f "$DESKTOP" ]] && grep -qF -e "Exec=\"$ROOT/" -e "Exec=$ROOT/" -- "$DESKTOP"
+  [[ -f "$DESKTOP" && ! -L "$DESKTOP" ]] && grep -qF -e "Exec=\"$ROOT/" -e "Exec=$ROOT/" -- "$DESKTOP"
 }
 owns_launcher() {
   [[ -L "$LAUNCHER" && "$(readlink "$LAUNCHER")" == "$LAUNCH" ]]
@@ -137,29 +139,42 @@ StartupNotify=false
 EOF
 }
 
-tmp="$(mktemp)"
-trap 'rm -f "$tmp"' EXIT
-desktop_content >"$tmp"
-
-if [[ -f "$DESKTOP" ]] && cmp -s "$tmp" "$DESKTOP"; then
-  say "desktop file: unchanged $DESKTOP"
-elif ! would "desktop file" "write $DESKTOP"; then
-  mkdir -p "$APP_DIR"
-  cp "$tmp" "$DESKTOP"
-  chmod 0644 "$DESKTOP"
-  say "desktop file: written $DESKTOP"
-  if command -v update-desktop-database >/dev/null 2>&1; then
-    update-desktop-database "$APP_DIR" >/dev/null 2>&1 || true
+# Written to a fresh temporary beside the destination and renamed into place,
+# so the write can never go through a symlink planted at $DESKTOP.
+content="$(desktop_content)"
+if [[ ! -e "$DESKTOP" && ! -L "$DESKTOP" ]] || owns_desktop; then
+  if owns_desktop && [[ "$(<"$DESKTOP")" == "$content" ]]; then
+    say "desktop file: unchanged $DESKTOP"
+  elif ! would "desktop file" "write $DESKTOP"; then
+    mkdir -p "$APP_DIR"
+    tmp="$(mktemp -p "$APP_DIR" .OmaCodeSnap.desktop.XXXXXXXXXX)"
+    trap 'rm -f -- "$tmp"' EXIT
+    chmod 0644 -- "$tmp"
+    printf '%s\n' "$content" >"$tmp"
+    mv -f -T -- "$tmp" "$DESKTOP"
+    trap - EXIT
+    say "desktop file: written $DESKTOP"
+    if command -v update-desktop-database >/dev/null 2>&1; then
+      update-desktop-database "$APP_DIR" >/dev/null 2>&1 || true
+    fi
   fi
+else
+  say "desktop file: not ours, left alone $DESKTOP"
 fi
 
 # Optional PATH launcher, only when ~/.local/bin already exists.
 if [[ -d "$BIN_DIR" ]]; then
-  if [[ -L "$LAUNCHER" && "$(readlink "$LAUNCHER")" == "$LAUNCH" ]]; then
+  if owns_launcher; then
     say "launcher: unchanged $LAUNCHER -> $LAUNCH"
+  elif [[ -e "$LAUNCHER" || -L "$LAUNCHER" ]]; then
+    say "launcher: not ours, left alone $LAUNCHER"
   elif ! would "launcher" "link $LAUNCHER -> $LAUNCH"; then
-    ln -sfn "$LAUNCH" "$LAUNCHER"
-    say "launcher: linked $LAUNCHER -> $LAUNCH"
+    # No -f: if something appears here meanwhile, ln fails rather than replace it.
+    if ln -s -- "$LAUNCH" "$LAUNCHER" 2>/dev/null; then
+      say "launcher: linked $LAUNCHER -> $LAUNCH"
+    else
+      say "launcher: not ours, left alone $LAUNCHER"
+    fi
   fi
 else
   say "launcher: skipped ($BIN_DIR does not exist; create it to get an omacodesnap command)"
