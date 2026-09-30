@@ -205,9 +205,9 @@ const TMUX_TREE = {
 };
 
 function fakeTmux(listing, { onCall } = {}) {
-  return (cmd, args) => {
+  return (cmd, args, options) => {
     if (cmd === "tmux") {
-      onCall?.(args);
+      onCall?.(args, options);
       if (listing instanceof Error) throw listing;
       return listing;
     }
@@ -221,6 +221,14 @@ test("tmuxPanePids: maps the terminal's tmux client to the pane it is showing", 
   const execFile = fakeTmux("110 210\n999 220\n", { onCall: (args) => calls.push(args) });
   assert.deepEqual(tmuxPanePids(100, { ...fakeProc(TMUX_TREE), execFile }), [210]);
   assert.deepEqual(calls, [["list-clients", "-F", "#{client_pid} #{pane_pid}"]]);
+});
+
+test("tmuxPanePids: bounds the tmux call with a timeout, so a hung server can't stall the snap", () => {
+  let received;
+  const execFile = fakeTmux("110 210\n", { onCall: (args, options) => (received = options) });
+  tmuxPanePids(100, { ...fakeProc(TMUX_TREE), execFile, timeoutMs: 250 });
+  assert.equal(received.timeout, 250);
+  assert.deepEqual(received.stdio, ["ignore", "pipe", "pipe"]);
 });
 
 test("tmuxPanePids: no tmux client in the terminal's tree never runs tmux", () => {
