@@ -344,6 +344,22 @@ test("discoverNvimAddress: finds Neovim inside herdr through the focused pane", 
   assert.equal(address, "/run/user/1000/nvim.212.0");
 });
 
+test("discoverNvimAddresses: a Neovim reached both directly and through a pane is verified once", () => {
+  // The herdr server itself runs inside the terminal here, so the pane's
+  // Neovim is also a direct descendant of the terminal.
+  const tree = { ...HERDR_TREE, 100: { comm: "ghostty", threads: { 100: [], 150: [110, 200] } } };
+  let verifications = 0;
+  const fake = fakeHerdr(herdrReply(210));
+  const execFile = (cmd, args, options) => {
+    if (cmd === "nvim") verifications++;
+    return fake.execFile(cmd, args, options);
+  };
+  const readDir = () => ["nvim.212.0"];
+  const addresses = discoverNvimAddresses(100, { ...fakeProc(tree), ...fake, execFile, runtimeDir: "/run/user/1000", readDir });
+  assert.deepEqual(addresses, ["/run/user/1000/nvim.212.0"]);
+  assert.equal(verifications, 1, "nvim 212 (the only one with a socket) is verified once, not twice");
+});
+
 test("queryNvim: decodes the probe's JSON stdout", () => {
   const execFile = () => '{"hasSelection":false,"filetype":"lua"}';
   assert.deepEqual(queryNvim("/sock", { execFile }), { hasSelection: false, filetype: "lua" });
