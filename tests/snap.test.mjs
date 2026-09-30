@@ -1140,3 +1140,50 @@ test("bin/omacodesnap: an empty selection with a matching but failing provider s
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+// A terminal editor's visual selection (Neovim) never reaches the Wayland
+// primary selection, so with an empty clipboard the raw `text` is empty even
+// though the adapter resolved a real selection over RPC. `hasSelection` must
+// follow what was actually resolved, or the CLI reports "Nothing selected".
+function fakeEditorContext(resolved) {
+  return async () => ({
+    editor: {
+      id: "neovim",
+      resolveSelection: async () => resolved,
+      highlight: async () => null,
+      font: () => null,
+      filenameFromTitle: () => null,
+    },
+    context: {},
+  });
+}
+
+test("prepareSnap: an editor-resolved selection counts as a selection even when the Wayland text is empty", async () => {
+  const result = await prepareSnap({
+    text: "",
+    windowClass: "com.mitchellh.ghostty",
+    theme: GRUVBOX,
+    scanProvidersFn: () => [],
+    detectContext: fakeEditorContext({
+      text: "let x = 1;",
+      lines: [[{ text: "let x = 1;", color: "#ffffff", fontStyle: null, fontWeight: null }]],
+      filename: "/tmp/sample.js",
+    }),
+    fontFn: () => ({ family: "monospace", size: 13 }),
+  });
+  assert.equal(result.hasSelection, true);
+  assert.equal(result.snap.lines[0][0].text, "let x = 1;");
+});
+
+test("prepareSnap: no Wayland text and no editor-resolved selection is not a selection", async () => {
+  const result = await prepareSnap({
+    text: "  \n",
+    windowClass: "com.mitchellh.ghostty",
+    theme: GRUVBOX,
+    scanProvidersFn: () => [],
+    detectContext: fakeEditorContext(null),
+    highlightFn: ({ text }) => canned(text),
+    fontFn: () => ({ family: "monospace", size: 13 }),
+  });
+  assert.equal(result.hasSelection, false);
+});

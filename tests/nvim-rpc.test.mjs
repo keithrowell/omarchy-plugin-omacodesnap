@@ -88,6 +88,11 @@ test("findNvimDescendants: an unlistable task directory still falls back to the 
   assert.deepEqual(findNvimDescendants(100, { readFile: fakeProcTree(tree), listTasks }), [101]);
 });
 
+test("findNvimDescendants: an empty task listing also falls back to the main thread", () => {
+  const tree = { 100: { comm: "foot", children: [101] }, 101: { comm: "nvim", children: [] } };
+  assert.deepEqual(findNvimDescendants(100, { readFile: fakeProcTree(tree), listTasks: () => [] }), [101]);
+});
+
 test("findNvimDescendants: a terminal running something else finds nothing", () => {
   const tree = { 100: { comm: "foot", children: [101] }, 101: { comm: "bash", children: [] } };
   assert.deepEqual(findNvimDescendants(100, fakeProc(tree)), []);
@@ -99,6 +104,7 @@ test("findNvimDescendants: an unreadable /proc entry degrades to no match, never
       readFile: () => {
         throw new Error("EACCES");
       },
+      listTasks: () => [999],
     }),
     [],
   );
