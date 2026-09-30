@@ -9,6 +9,8 @@ import {
   candidateSockets,
   verifySocket,
   discoverNvimAddress,
+  discoverNvimAddresses,
+  probeSelectedNvim,
   queryNvim,
   TERMINAL_CLASSES,
   PROBE_PATH,
@@ -153,6 +155,39 @@ test("discoverNvimAddress: tries every nvim descendant's every socket, returns t
 test("discoverNvimAddress: no nvim in the tree at all -> null", () => {
   const tree = { 100: { comm: "foot", children: [] } };
   assert.equal(discoverNvimAddress(100, fakeProc(tree)), null);
+});
+
+test("discoverNvimAddresses: a single-instance terminal yields every surface's Neovim, not just the first", () => {
+  // One Ghostty process serves every window, so two windows running Neovim
+  // are both descendants of the same terminal pid.
+  const tree = {
+    100: { comm: "ghostty", threads: { 100: [], 150: [101], 160: [105] } },
+    101: { comm: "fish", children: [102] },
+    102: { comm: "nvim", children: [] },
+    105: { comm: "fish", children: [106] },
+    106: { comm: "nvim", children: [] },
+  };
+  const readDir = () => ["nvim.102.0", "nvim.106.0"];
+  const execFile = (cmd, args) => args[1].match(/nvim\.(\d+)\./)[1];
+  assert.deepEqual(discoverNvimAddresses(100, { ...fakeProc(tree), runtimeDir: "/run/user/1000", readDir, execFile }), [
+    "/run/user/1000/nvim.102.0",
+    "/run/user/1000/nvim.106.0",
+  ]);
+});
+
+test("probeSelectedNvim: picks the Neovim that actually holds a visual selection", () => {
+  const probes = {
+    "/a": { hasSelection: false, filename: "other-window.js" },
+    "/b": { hasSelection: true, filename: "focused-window.js" },
+  };
+  const found = probeSelectedNvim(["/a", "/b"], { queryFn: (address) => probes[address] });
+  assert.equal(found.filename, "focused-window.js");
+});
+
+test("probeSelectedNvim: no Neovim with a selection, or unreachable ones, yields null", () => {
+  const queryFn = (address) => (address === "/a" ? null : { hasSelection: false });
+  assert.equal(probeSelectedNvim(["/a", "/b"], { queryFn }), null);
+  assert.equal(probeSelectedNvim([], { queryFn }), null);
 });
 
 test("queryNvim: decodes the probe's JSON stdout", () => {

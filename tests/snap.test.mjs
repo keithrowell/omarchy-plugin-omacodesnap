@@ -1199,10 +1199,22 @@ test("live CLI: a Neovim visual selection snaps even with an empty Wayland selec
   writeFileSync(file, "const x = 1;\nconst y = 2;\n");
   const child = spawn("nvim", ["--headless", "-u", "NONE", "-c", "set filetype=javascript", file], { stdio: "ignore" });
   try {
-    await new Promise((r) => setTimeout(r, 500)); // let Neovim start and bind its socket
-    const address = discoverNvimAddress(child.pid);
-    assert.ok(address, "expected to discover the headless Neovim's socket");
+    // Poll rather than sleep a fixed time: a slow machine may take a while to
+    // bind the socket, and remote-send returns before the keys are processed.
+    const until = async (probe, what) => {
+      for (let i = 0; i < 50; i++) {
+        const value = probe();
+        if (value) return value;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      assert.fail(`timed out waiting for ${what}`);
+    };
+    const address = await until(() => discoverNvimAddress(child.pid), "the headless Neovim's socket");
     spawnSync("nvim", ["--server", address, "--remote-send", "ggVj"], { stdio: "ignore" });
+    await until(
+      () => spawnSync("nvim", ["--server", address, "--remote-expr", "mode()"], { encoding: "utf8" }).stdout.trim() === "V",
+      "linewise visual mode",
+    );
 
     const selection = join(dir, "selection.txt");
     const window = join(dir, "window.json");
