@@ -1,6 +1,6 @@
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawnSync, spawn } from "node:child_process";
 import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync, readFileSync, readdirSync, rmSync, existsSync, cpSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { detectEditor, filenameFromTitle, prepareSnap, MAX_LINES, EDITOR_CLASSES } from "../lib/snap.mjs";
 import { validateFixture } from "../lib/input.mjs";
 import { readTheme } from "../lib/theme.mjs";
+import { discoverNvimAddress } from "../lib/nvim-rpc.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -1138,5 +1139,96 @@ test("bin/omacodesnap: an empty selection with a matching but failing provider s
     assert.ok(!existsSync(join(home, "omarchy-shell-invocations.txt")), "the shell service must never be handed a blank/failed render");
   } finally {
     rmSync(home, { recursive: true, force: true });
+  }
+});
+
+// A terminal editor's visual selection (Neovim) never reaches the Wayland
+// primary selection, so with an empty clipboard the raw `text` is empty even
+// though the adapter resolved a real selection over RPC. `hasSelection` must
+// follow what was actually resolved, or the CLI reports "Nothing selected".
+function fakeEditorContext(resolved) {
+  return async () => ({
+    editor: {
+      id: "neovim",
+      resolveSelection: async () => resolved,
+      highlight: async () => null,
+      font: () => null,
+      filenameFromTitle: () => null,
+    },
+    context: {},
+  });
+}
+
+test("prepareSnap: an editor-resolved selection counts as a selection even when the Wayland text is empty", async () => {
+  const result = await prepareSnap({
+    text: "",
+    windowClass: "com.mitchellh.ghostty",
+    theme: GRUVBOX,
+    scanProvidersFn: () => [],
+    detectContext: fakeEditorContext({
+      text: "let x = 1;",
+      lines: [[{ text: "let x = 1;", color: "#ffffff", fontStyle: null, fontWeight: null }]],
+      filename: "/tmp/sample.js",
+    }),
+    fontFn: () => ({ family: "monospace", size: 13 }),
+  });
+  assert.equal(result.hasSelection, true);
+  assert.equal(result.snap.lines[0][0].text, "let x = 1;");
+});
+
+test("prepareSnap: no Wayland text and no editor-resolved selection is not a selection", async () => {
+  const result = await prepareSnap({
+    text: "  \n",
+    windowClass: "com.mitchellh.ghostty",
+    theme: GRUVBOX,
+    scanProvidersFn: () => [],
+    detectContext: fakeEditorContext(null),
+    highlightFn: ({ text }) => canned(text),
+    fontFn: () => ({ family: "monospace", size: 13 }),
+  });
+  assert.equal(result.hasSelection, false);
+});
+
+// --- live CLI test (real headless Neovim, skipped if not installed) ---------
+
+const HAS_NVIM_CLI = spawnSync("nvim", ["--version"], { stdio: "ignore" }).status === 0;
+
+test("live CLI: a Neovim visual selection snaps even with an empty Wayland selection", { skip: !HAS_NVIM_CLI }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "omacodesnap-cli-"));
+  const file = join(dir, "sample.js");
+  writeFileSync(file, "const x = 1;\nconst y = 2;\n");
+  const child = spawn("nvim", ["--headless", "-u", "NONE", "-c", "set filetype=javascript", file], { stdio: "ignore" });
+  try {
+    // Poll rather than sleep a fixed time: a slow machine may take a while to
+    // bind the socket, and remote-send returns before the keys are processed.
+    const until = async (probe, what) => {
+      for (let i = 0; i < 50; i++) {
+        const value = probe();
+        if (value) return value;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      assert.fail(`timed out waiting for ${what}`);
+    };
+    const address = await until(() => discoverNvimAddress(child.pid), "the headless Neovim's socket");
+    spawnSync("nvim", ["--server", address, "--remote-send", "ggVj"], { stdio: "ignore" });
+    await until(
+      () => spawnSync("nvim", ["--server", address, "--remote-expr", "mode()"], { encoding: "utf8" }).stdout.trim() === "V",
+      "linewise visual mode",
+    );
+
+    const selection = join(dir, "selection.txt");
+    const window = join(dir, "window.json");
+    const out = join(dir, "input.json");
+    writeFileSync(selection, ""); // an empty primary selection and clipboard
+    writeFileSync(window, JSON.stringify({ class: "foot", title: "sample.js", pid: child.pid }));
+    const result = spawnSync(process.execPath, [SNAP_CLI, "--selection", selection, "--window", window, "--request", join(dir, "request.json"), "--out", out, "--theme-dir", GRUVBOX_DIR], { encoding: "utf8" });
+
+    assert.equal(result.status, 0, `expected a snap, got exit ${result.status}: ${result.stderr}`);
+    const input = JSON.parse(readFileSync(out, "utf8"));
+    assert.equal(input.detected.editor, "neovim");
+    assert.equal(input.snap.lines.length, 2);
+  } finally {
+    child.kill();
+    rmSync(dir, { recursive: true, force: true });
   }
 });
