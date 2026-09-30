@@ -1,6 +1,6 @@
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawnSync, spawn } from "node:child_process";
 import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync, readFileSync, readdirSync, rmSync, existsSync, cpSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { detectEditor, filenameFromTitle, prepareSnap, MAX_LINES, EDITOR_CLASSES } from "../lib/snap.mjs";
 import { validateFixture } from "../lib/input.mjs";
 import { readTheme } from "../lib/theme.mjs";
+import { discoverNvimAddress } from "../lib/nvim-rpc.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -1186,4 +1187,36 @@ test("prepareSnap: no Wayland text and no editor-resolved selection is not a sel
     fontFn: () => ({ family: "monospace", size: 13 }),
   });
   assert.equal(result.hasSelection, false);
+});
+
+// --- live CLI test (real headless Neovim, skipped if not installed) ---------
+
+const HAS_NVIM_CLI = spawnSync("nvim", ["--version"], { stdio: "ignore" }).status === 0;
+
+test("live CLI: a Neovim visual selection snaps even with an empty Wayland selection", { skip: !HAS_NVIM_CLI }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), "omacodesnap-cli-"));
+  const file = join(dir, "sample.js");
+  writeFileSync(file, "const x = 1;\nconst y = 2;\n");
+  const child = spawn("nvim", ["--headless", "-u", "NONE", "-c", "set filetype=javascript", file], { stdio: "ignore" });
+  try {
+    await new Promise((r) => setTimeout(r, 500)); // let Neovim start and bind its socket
+    const address = discoverNvimAddress(child.pid);
+    assert.ok(address, "expected to discover the headless Neovim's socket");
+    spawnSync("nvim", ["--server", address, "--remote-send", "ggVj"], { stdio: "ignore" });
+
+    const selection = join(dir, "selection.txt");
+    const window = join(dir, "window.json");
+    const out = join(dir, "input.json");
+    writeFileSync(selection, ""); // an empty primary selection and clipboard
+    writeFileSync(window, JSON.stringify({ class: "foot", title: "sample.js", pid: child.pid }));
+    const result = spawnSync(process.execPath, [SNAP_CLI, "--selection", selection, "--window", window, "--request", join(dir, "request.json"), "--out", out, "--theme-dir", GRUVBOX_DIR], { encoding: "utf8" });
+
+    assert.equal(result.status, 0, `expected a snap, got exit ${result.status}: ${result.stderr}`);
+    const input = JSON.parse(readFileSync(out, "utf8"));
+    assert.equal(input.detected.editor, "neovim");
+    assert.equal(input.snap.lines.length, 2);
+  } finally {
+    child.kill();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
