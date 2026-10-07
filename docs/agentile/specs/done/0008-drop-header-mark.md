@@ -1,7 +1,7 @@
 ---
 title: Drop the Omarchy maze mark from the snap header
 slug: drop-header-mark
-status: ready
+status: shipped
 depends_on: []
 type: feature
 route: foreground
@@ -12,6 +12,7 @@ outcome: a fresh live snap shows a plain two-line header (title, source/language
 claimed_by:
 label:
 claimed_at:
+shipped_at: 2026-09-07T21:25:30Z
 ---
 
 # Drop the Omarchy maze mark from the snap header
@@ -30,22 +31,22 @@ Hyprland border/corners; the mark is redundant on top of that.
 
 ## Acceptance criteria
 
-- [ ] `app/Snap.qml`'s header shows only the two-line title/subtitle,
+- [x] `app/Snap.qml`'s header shows only the two-line title/subtitle,
       left-aligned at the header's own left padding — no glyph, no
       fallback image, no reserved icon space.
-- [ ] The glyph machinery is removed, not hidden: `iconFontPath`,
+- [x] The glyph machinery is removed, not hidden: `iconFontPath`,
       `mazeGlyph`, `headerGlyphFactor`, `glyphSize`, the `iconFont`
       `FontLoader`, the glyph `Text`, the fallback `Image`, its
       `ColorOverlay`, and the `ready` property's wait on `iconFont.status`.
-- [ ] The now-unused `Qt5Compat.GraphicalEffects` import is removed.
-- [ ] Every gallery image (`docs/gallery/0*.png`) and the README hero
+- [x] The now-unused `Qt5Compat.GraphicalEffects` import is removed.
+- [x] Every gallery image (`docs/gallery/0*.png`) and the README hero
       (`docs/hero.png`) are regenerated the same way `docs/gallery/
       SOURCES.md` documents — same code, same themes, no other change —
       and show the new plain header.
-- [ ] `docs/gallery/SOURCES.md` and any other doc describing the header
+- [x] `docs/gallery/SOURCES.md` and any other doc describing the header
       (top-of-file comment in `Snap.qml`) are updated; the shipped spec
       0001 and 0004 records are left as historical record, not rewritten.
-- [ ] All tests pass; a live snap (real selection, real binding) confirms
+- [x] All tests pass; a live snap (real selection, real binding) confirms
       the change outside the fixture path too.
 
 ## Scope boundary
