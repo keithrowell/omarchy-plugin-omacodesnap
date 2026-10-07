@@ -11,6 +11,7 @@ import {
   discoverNvimAddress,
   discoverNvimAddresses,
   probeSelectedNvim,
+  tmuxPanePids,
   queryNvim,
   TERMINAL_CLASSES,
   PROBE_PATH,
@@ -188,6 +189,90 @@ test("probeSelectedNvim: no Neovim with a selection, or unreachable ones, yields
   const queryFn = (address) => (address === "/a" ? null : { hasSelection: false });
   assert.equal(probeSelectedNvim(["/a", "/b"], { queryFn }), null);
   assert.equal(probeSelectedNvim([], { queryFn }), null);
+});
+
+// Under tmux the terminal's own tree ends at the tmux client; Neovim lives
+// under the tmux server, a separate tree reached through the client's active
+// pane.
+const TMUX_TREE = {
+  100: { comm: "ghostty", threads: { 100: [], 150: [110] } },
+  110: { comm: "tmux: client", children: [] },
+  200: { comm: "tmux: server", children: [210, 220] },
+  210: { comm: "fish", children: [211] },
+  211: { comm: "nvim", children: [212] },
+  212: { comm: "nvim", children: [] },
+  220: { comm: "fish", children: [] },
+};
+
+function fakeTmux(listing, { onCall } = {}) {
+  return (cmd, args, options) => {
+    if (cmd === "tmux") {
+      onCall?.(args, options);
+      if (listing instanceof Error) throw listing;
+      return listing;
+    }
+    // nvim --server <address> --remote-expr getpid()
+    return args[1] === "/run/user/1000/nvim.212.0" ? "212" : "999";
+  };
+}
+
+test("tmuxPanePids: maps the terminal's tmux client to the pane it is showing", () => {
+  const calls = [];
+  const execFile = fakeTmux("110 210\n999 220\n", { onCall: (args) => calls.push(args) });
+  assert.deepEqual(tmuxPanePids(100, { ...fakeProc(TMUX_TREE), execFile }), [210]);
+  assert.deepEqual(calls, [["list-clients", "-F", "#{client_pid} #{pane_pid}"]]);
+});
+
+test("tmuxPanePids: bounds the tmux call with a timeout, so a hung server can't stall the snap", () => {
+  let received;
+  const execFile = fakeTmux("110 210\n", { onCall: (args, options) => (received = options) });
+  tmuxPanePids(100, { ...fakeProc(TMUX_TREE), execFile, timeoutMs: 250 });
+  assert.equal(received.timeout, 250);
+  assert.deepEqual(received.stdio, ["ignore", "pipe", "pipe"]);
+});
+
+test("tmuxPanePids: no tmux client in the terminal's tree never runs tmux", () => {
+  const tree = { 100: { comm: "foot", children: [101] }, 101: { comm: "fish", children: [] } };
+  const execFile = () => {
+    throw new Error("tmux must not run without a tmux client in the tree");
+  };
+  assert.deepEqual(tmuxPanePids(100, { ...fakeProc(tree), execFile }), []);
+});
+
+test("tmuxPanePids: a failing tmux call degrades to no panes, never throws", () => {
+  const execFile = fakeTmux(new Error("no server running"));
+  assert.deepEqual(tmuxPanePids(100, { ...fakeProc(TMUX_TREE), execFile }), []);
+});
+
+test("discoverNvimAddress: finds Neovim inside tmux through the client's active pane", () => {
+  const readDir = () => ["nvim.211.0", "nvim.212.0"];
+  const execFile = fakeTmux("110 210\n");
+  const address = discoverNvimAddress(100, { ...fakeProc(TMUX_TREE), runtimeDir: "/run/user/1000", readDir, execFile });
+  assert.equal(address, "/run/user/1000/nvim.212.0");
+});
+
+test("discoverNvimAddress: another pane's Neovim is never picked for this client", () => {
+  // The client is showing pane 220 (a bare shell); the Neovim under pane 210
+  // belongs to a different window and must not be snapped.
+  const readDir = () => ["nvim.211.0", "nvim.212.0"];
+  const execFile = fakeTmux("110 220\n");
+  assert.equal(discoverNvimAddress(100, { ...fakeProc(TMUX_TREE), runtimeDir: "/run/user/1000", readDir, execFile }), null);
+});
+
+test("discoverNvimAddresses: a Neovim in another window doesn't hide the one inside tmux", () => {
+  // Same Ghostty process: one window runs Neovim directly, the focused one
+  // runs tmux. Both must be candidates; the selection decides which is snapped.
+  const tree = {
+    ...TMUX_TREE,
+    100: { comm: "ghostty", threads: { 100: [], 150: [110], 160: [300] } },
+    300: { comm: "nvim", children: [] },
+  };
+  const readDir = () => ["nvim.212.0", "nvim.300.0"];
+  const execFile = (cmd, args) => (cmd === "tmux" ? "110 210\n" : args[1].match(/nvim\.(\d+)\./)[1]);
+  assert.deepEqual(discoverNvimAddresses(100, { ...fakeProc(tree), runtimeDir: "/run/user/1000", readDir, execFile }), [
+    "/run/user/1000/nvim.300.0",
+    "/run/user/1000/nvim.212.0",
+  ]);
 });
 
 test("queryNvim: decodes the probe's JSON stdout", () => {
