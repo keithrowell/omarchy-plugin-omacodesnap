@@ -12,6 +12,7 @@ import {
   discoverNvimAddresses,
   probeSelectedNvim,
   tmuxPanePids,
+  herdrPanePids,
   queryNvim,
   TERMINAL_CLASSES,
   PROBE_PATH,
@@ -273,6 +274,90 @@ test("discoverNvimAddresses: a Neovim in another window doesn't hide the one ins
     "/run/user/1000/nvim.300.0",
     "/run/user/1000/nvim.212.0",
   ]);
+});
+
+// herdr is client/server like tmux: the terminal's tree ends at the herdr
+// client, and the panes run under the herdr server.
+const HERDR_TREE = {
+  100: { comm: "ghostty", threads: { 100: [], 150: [110] } },
+  110: { comm: "herdr", children: [] },
+  200: { comm: "herdr", children: [210] },
+  210: { comm: "fish", children: [211] },
+  211: { comm: "nvim", children: [212] },
+  212: { comm: "nvim", children: [] },
+};
+
+function herdrReply(shellPid) {
+  return JSON.stringify({ id: "cli:pane:process_info", result: { process_info: { pane_id: "w1:p1", shell_pid: shellPid }, type: "pane_process_info" } });
+}
+
+function fakeHerdr(reply, { onCall, cmdline = "herdr" } = {}) {
+  return {
+    readCmdline: () => cmdline,
+    execFile: (cmd, args, options) => {
+      if (cmd === "herdr") {
+        onCall?.(args, options);
+        if (reply instanceof Error) throw reply;
+        return reply;
+      }
+      if (cmd === "tmux") throw new Error("no tmux here");
+      return args[1] === "/run/user/1000/nvim.212.0" ? "212" : "999";
+    },
+  };
+}
+
+test("herdrPanePids: maps the terminal's herdr client to the focused pane's shell", () => {
+  const calls = [];
+  const fake = fakeHerdr(herdrReply(210), { onCall: (args, options) => calls.push({ args, options }) });
+  assert.deepEqual(herdrPanePids(100, { ...fakeProc(HERDR_TREE), ...fake, timeoutMs: 250 }), [210]);
+  assert.deepEqual(calls[0].args, ["pane", "process-info", "--current"]);
+  assert.equal(calls[0].options.timeout, 250);
+});
+
+test("herdrPanePids: a named session is queried on that session", () => {
+  const calls = [];
+  for (const cmdline of ["herdr\0--session\0work\0", "herdr\0session\0attach\0work\0"]) {
+    const fake = fakeHerdr(herdrReply(210), { cmdline, onCall: (args) => calls.push(args) });
+    herdrPanePids(100, { ...fakeProc(HERDR_TREE), ...fake });
+  }
+  assert.deepEqual(calls, [
+    ["--session", "work", "pane", "process-info", "--current"],
+    ["--session", "work", "pane", "process-info", "--current"],
+  ]);
+});
+
+test("herdrPanePids: no herdr client in the tree never runs herdr", () => {
+  const tree = { 100: { comm: "foot", children: [101] }, 101: { comm: "fish", children: [] } };
+  const fake = fakeHerdr(new Error("herdr must not run without a herdr client in the tree"));
+  assert.deepEqual(herdrPanePids(100, { ...fakeProc(tree), ...fake }), []);
+});
+
+test("herdrPanePids: a failing call or an unexpected reply degrades to no panes", () => {
+  for (const reply of [new Error("server not running"), "not json", JSON.stringify({ result: {} })]) {
+    assert.deepEqual(herdrPanePids(100, { ...fakeProc(HERDR_TREE), ...fakeHerdr(reply) }), []);
+  }
+});
+
+test("discoverNvimAddress: finds Neovim inside herdr through the focused pane", () => {
+  const readDir = () => ["nvim.211.0", "nvim.212.0"];
+  const address = discoverNvimAddress(100, { ...fakeProc(HERDR_TREE), ...fakeHerdr(herdrReply(210)), runtimeDir: "/run/user/1000", readDir });
+  assert.equal(address, "/run/user/1000/nvim.212.0");
+});
+
+test("discoverNvimAddresses: a Neovim reached both directly and through a pane is verified once", () => {
+  // The herdr server itself runs inside the terminal here, so the pane's
+  // Neovim is also a direct descendant of the terminal.
+  const tree = { ...HERDR_TREE, 100: { comm: "ghostty", threads: { 100: [], 150: [110, 200] } } };
+  let verifications = 0;
+  const fake = fakeHerdr(herdrReply(210));
+  const execFile = (cmd, args, options) => {
+    if (cmd === "nvim") verifications++;
+    return fake.execFile(cmd, args, options);
+  };
+  const readDir = () => ["nvim.212.0"];
+  const addresses = discoverNvimAddresses(100, { ...fakeProc(tree), ...fake, execFile, runtimeDir: "/run/user/1000", readDir });
+  assert.deepEqual(addresses, ["/run/user/1000/nvim.212.0"]);
+  assert.equal(verifications, 1, "nvim 212 (the only one with a socket) is verified once, not twice");
 });
 
 test("queryNvim: decodes the probe's JSON stdout", () => {
