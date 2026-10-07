@@ -133,6 +133,11 @@ re-highlighted, so plugins, colorschemes and LSP tokens all come through.
 This is the one editor where OmaCodeSnap takes the selection from the editor
 rather than from Wayland.
 
+Neovim running inside tmux or [herdr](https://herdr.dev) works too:
+OmaCodeSnap follows the multiplexer client to the pane it is showing and
+looks for Neovim there. A tmux server on a non-default socket (`tmux -L` or
+`tmux -S`) isn't found, so those snaps fall back to the Wayland selection.
+
 **Everything else.** The text is highlighted with OmaCodeSnap's own Zed
 grammars in the theme's colours, or left plain if the language isn't
 recognised.
