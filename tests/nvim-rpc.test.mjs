@@ -9,6 +9,8 @@ import {
   candidateSockets,
   verifySocket,
   discoverNvimAddress,
+  discoverNvimAddresses,
+  probeSelectedNvim,
   queryNvim,
   TERMINAL_CLASSES,
   PROBE_PATH,
@@ -27,14 +29,33 @@ function fakeProcTree(tree) {
       if (!node) throw new Error("ENOENT");
       return `${node.comm}\n`;
     }
-    const c = /^\/proc\/(\d+)\/task\/\d+\/children$/.exec(path);
+    const c = /^\/proc\/(\d+)\/task\/(\d+)\/children$/.exec(path);
     if (c) {
       const node = tree[Number(c[1])];
       if (!node) throw new Error("ENOENT");
-      return (node.children ?? []).join(" ");
+      const tid = Number(c[2]);
+      // `threads` models a process whose children were forked by threads
+      // other than the main one; without it, every child hangs off the main
+      // thread (tid === pid), which is what single-threaded programs do.
+      const children = node.threads ? node.threads[tid] : tid === Number(c[1]) ? node.children : undefined;
+      if (children === undefined) throw new Error("ENOENT");
+      return children.join(" ");
     }
     throw new Error("ENOENT");
   };
+}
+
+function fakeTaskList(tree) {
+  // The thread ids under /proc/<pid>/task for each fake process.
+  return (pid) => {
+    const node = tree[pid];
+    if (!node) throw new Error("ENOENT");
+    return node.threads ? Object.keys(node.threads).map(Number) : [pid];
+  };
+}
+
+function fakeProc(tree) {
+  return { readFile: fakeProcTree(tree), listTasks: fakeTaskList(tree) };
 }
 
 test("findNvimDescendants: finds a nested nvim (TUI + embedded core), shallowest first", () => {
@@ -43,13 +64,40 @@ test("findNvimDescendants: finds a nested nvim (TUI + embedded core), shallowest
     101: { comm: "nvim", children: [102] },
     102: { comm: "nvim", children: [] },
   };
-  const found = findNvimDescendants(100, { readFile: fakeProcTree(tree) });
+  const found = findNvimDescendants(100, fakeProc(tree));
   assert.deepEqual(found, [101, 102]);
+});
+
+test("findNvimDescendants: follows children forked by any thread, not just the main one (Ghostty)", () => {
+  // Ghostty forks each shell from a per-surface thread, so the shell is
+  // listed in /proc/<ghostty>/task/<that thread>/children and never in the
+  // main thread's own children file.
+  const tree = {
+    100: { comm: "ghostty", threads: { 100: [120], 150: [101] } },
+    120: { comm: "ghostty", children: [] },
+    101: { comm: "fish", children: [102] },
+    102: { comm: "nvim", children: [103] },
+    103: { comm: "nvim", children: [] },
+  };
+  assert.deepEqual(findNvimDescendants(100, fakeProc(tree)), [102, 103]);
+});
+
+test("findNvimDescendants: an unlistable task directory still falls back to the main thread", () => {
+  const tree = { 100: { comm: "foot", children: [101] }, 101: { comm: "nvim", children: [] } };
+  const listTasks = () => {
+    throw new Error("EACCES");
+  };
+  assert.deepEqual(findNvimDescendants(100, { readFile: fakeProcTree(tree), listTasks }), [101]);
+});
+
+test("findNvimDescendants: an empty task listing also falls back to the main thread", () => {
+  const tree = { 100: { comm: "foot", children: [101] }, 101: { comm: "nvim", children: [] } };
+  assert.deepEqual(findNvimDescendants(100, { readFile: fakeProcTree(tree), listTasks: () => [] }), [101]);
 });
 
 test("findNvimDescendants: a terminal running something else finds nothing", () => {
   const tree = { 100: { comm: "foot", children: [101] }, 101: { comm: "bash", children: [] } };
-  assert.deepEqual(findNvimDescendants(100, { readFile: fakeProcTree(tree) }), []);
+  assert.deepEqual(findNvimDescendants(100, fakeProc(tree)), []);
 });
 
 test("findNvimDescendants: an unreadable /proc entry degrades to no match, never throws", () => {
@@ -58,6 +106,7 @@ test("findNvimDescendants: an unreadable /proc entry degrades to no match, never
       readFile: () => {
         throw new Error("EACCES");
       },
+      listTasks: () => [999],
     }),
     [],
   );
@@ -99,13 +148,46 @@ test("discoverNvimAddress: tries every nvim descendant's every socket, returns t
   // TUI process's own socket, if it even has one, being stale/mismatched —
   // "999" never equals either candidate's own pid, so it never verifies).
   const execFile = (cmd, args) => (args[1] === "/run/user/1000/nvim.105.0" ? "105" : "999");
-  const address = discoverNvimAddress(100, { readFile: fakeProcTree(tree), runtimeDir: "/run/user/1000", readDir, execFile });
+  const address = discoverNvimAddress(100, { ...fakeProc(tree), runtimeDir: "/run/user/1000", readDir, execFile });
   assert.equal(address, "/run/user/1000/nvim.105.0");
 });
 
 test("discoverNvimAddress: no nvim in the tree at all -> null", () => {
   const tree = { 100: { comm: "foot", children: [] } };
-  assert.equal(discoverNvimAddress(100, { readFile: fakeProcTree(tree) }), null);
+  assert.equal(discoverNvimAddress(100, fakeProc(tree)), null);
+});
+
+test("discoverNvimAddresses: a single-instance terminal yields every surface's Neovim, not just the first", () => {
+  // One Ghostty process serves every window, so two windows running Neovim
+  // are both descendants of the same terminal pid.
+  const tree = {
+    100: { comm: "ghostty", threads: { 100: [], 150: [101], 160: [105] } },
+    101: { comm: "fish", children: [102] },
+    102: { comm: "nvim", children: [] },
+    105: { comm: "fish", children: [106] },
+    106: { comm: "nvim", children: [] },
+  };
+  const readDir = () => ["nvim.102.0", "nvim.106.0"];
+  const execFile = (cmd, args) => args[1].match(/nvim\.(\d+)\./)[1];
+  assert.deepEqual(discoverNvimAddresses(100, { ...fakeProc(tree), runtimeDir: "/run/user/1000", readDir, execFile }), [
+    "/run/user/1000/nvim.102.0",
+    "/run/user/1000/nvim.106.0",
+  ]);
+});
+
+test("probeSelectedNvim: picks the Neovim that actually holds a visual selection", () => {
+  const probes = {
+    "/a": { hasSelection: false, filename: "other-window.js" },
+    "/b": { hasSelection: true, filename: "focused-window.js" },
+  };
+  const found = probeSelectedNvim(["/a", "/b"], { queryFn: (address) => probes[address] });
+  assert.equal(found.filename, "focused-window.js");
+});
+
+test("probeSelectedNvim: no Neovim with a selection, or unreachable ones, yields null", () => {
+  const queryFn = (address) => (address === "/a" ? null : { hasSelection: false });
+  assert.equal(probeSelectedNvim(["/a", "/b"], { queryFn }), null);
+  assert.equal(probeSelectedNvim([], { queryFn }), null);
 });
 
 test("queryNvim: decodes the probe's JSON stdout", () => {
