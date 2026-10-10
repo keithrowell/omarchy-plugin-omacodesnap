@@ -401,7 +401,10 @@ test("live: discoverNvimAddress + queryNvim against a real headless Neovim", { s
     assert.ok(probe, "expected a real probe response");
     assert.equal(probe.hasSelection, false); // headless, nothing selected
     assert.equal(probe.filetype, "javascript");
-    assert.ok(probe.filename.endsWith("sample.js"));
+    // A bare filename (expand("%:t")), not the full path `file` holds — the
+    // frame's title bar shows this as-is, and a full absolute path was
+    // reported as a real usability bug (found live, 2026-09-09).
+    assert.equal(probe.filename, "sample.js");
   } finally {
     child.kill();
     rmSync(dir, { recursive: true, force: true });
